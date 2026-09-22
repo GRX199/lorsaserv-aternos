@@ -11,9 +11,26 @@ function cleanMinecraftFormatting(text) {
 }
 
 /**
+ * Memeriksa apakah host adalah loopback / local IP
+ */
+function isLocalOrPrivateHost(host) {
+  if (!host) return true;
+  const h = host.toLowerCase().trim();
+  return (
+    h === '127.0.0.1' ||
+    h === 'localhost' ||
+    h === '::1' ||
+    h === 'auto' ||
+    h.startsWith('192.168.') ||
+    h.startsWith('10.') ||
+    h.startsWith('172.16.')
+  );
+}
+
+/**
  * Ping langsung server Minecraft Bedrock menggunakan RakNet UDP Unconnected Ping (0x01)
  */
-function pingBedrockUDP(host, port = 19132, timeoutMs = 3500) {
+function pingBedrockUDP(host, port = 19132, timeoutMs = 2500) {
   return new Promise((resolve, reject) => {
     const socket = dgram.createSocket('udp4');
     let isSettled = false;
@@ -66,7 +83,7 @@ function pingBedrockUDP(host, port = 19132, timeoutMs = 3500) {
             version: parts[3] ? `Bedrock ${parts[3]}` : 'Bedrock',
             players: {
               online: parseInt(parts[4] || '0', 10) || 0,
-              max: parseInt(parts[5] || '0', 10) || 20,
+              max: parseInt(parts[5] || '10', 10) || 10,
               list: []
             },
             serverGuid: parts[6] || '',
@@ -98,9 +115,9 @@ function pingBedrockUDP(host, port = 19132, timeoutMs = 3500) {
 }
 
 /**
- * Ping server melalui API publik mcstatus.io (Fallback jika UDP diblokir ISP/Host)
+ * Ping server melalui API publik mcstatus.io (Hanya untuk server publik internet, bukan 127.0.0.1)
  */
-async function pingViaApi(host, port, type = 'bedrock', timeoutMs = 5000) {
+async function pingViaApi(host, port, type = 'bedrock', timeoutMs = 4000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -128,6 +145,20 @@ async function pingViaApi(host, port, type = 'bedrock', timeoutMs = 5000) {
     };
   }
 
+  // Jika mcstatus.io mengembalikan demo server palsu (misal 144.172.67.4), anggap offline!
+  if (data.ip_address === '144.172.67.4' || data.motd?.clean?.includes('A Bedrock server\nYou cannot connect!')) {
+    return {
+      online: false,
+      source: 'mcstatus-api-mock',
+      host,
+      port,
+      type,
+      motd: 'Offline',
+      version: 'N/A',
+      players: { online: 0, max: 10, list: [] }
+    };
+  }
+
   return {
     online: true,
     source: 'mcstatus-api',
@@ -149,43 +180,58 @@ async function pingViaApi(host, port, type = 'bedrock', timeoutMs = 5000) {
 
 /**
  * Fungsi utama untuk mengecek status server Minecraft (Bedrock / Java)
- * Menggunakan RakNet UDP terlebih dahulu untuk Bedrock, dan otomatis beralih ke API jika gagal.
+ * Untuk server lokal (127.0.0.1 VPS), hanya menggunakan UDP langsung dan TIDAK PERNAH query mcstatus API
  */
 async function checkServerStatus(host, port = 19132, type = 'bedrock') {
   const isBedrock = type.toLowerCase() === 'bedrock';
+  const isLocal = isLocalOrPrivateHost(host);
 
-  // 1. Coba RakNet UDP langsung jika Bedrock
+  // 1. Coba RakNet UDP langsung
   if (isBedrock) {
     try {
-      const udpResult = await pingBedrockUDP(host, port, 3000);
+      const udpResult = await pingBedrockUDP(host, port, 2500);
       return udpResult;
     } catch (udpErr) {
-      // Jika UDP gagal atau timed out (misal ISP blok UDP atau di hosting cloud seperti Render), lanjut ke API
+      // Jika UDP timeout pada host lokal (127.0.0.1), berarti server lokal memang OFFLINE!
+      if (isLocal) {
+        return {
+          online: false,
+          source: 'local-udp',
+          host,
+          port,
+          type,
+          motd: 'Server Offline',
+          version: 'Bedrock',
+          players: { online: 0, max: 10, list: [] }
+        };
+      }
     }
   }
 
-  // 2. Fallback ke mcstatus.io REST API (Bekerja sempurna di hosting cloud seperti Render)
-  try {
-    const apiResult = await pingViaApi(host, port, type, 5000);
-    return apiResult;
-  } catch (apiErr) {
-    // Keduanya gagal atau server benar-benar offline
-    return {
-      online: false,
-      source: 'none',
-      host,
-      port,
-      type,
-      motd: 'Server Offline',
-      version: 'N/A',
-      players: { online: 0, max: 20, list: [] }
-    };
+  // 2. Fallback ke mcstatus.io API HANYA jika bukan host lokal (misal untuk domain Aternos)
+  if (!isLocal && host !== 'auto') {
+    try {
+      const apiResult = await pingViaApi(host, port, type, 4000);
+      return apiResult;
+    } catch (apiErr) {}
   }
+
+  return {
+    online: false,
+    source: 'none',
+    host,
+    port,
+    type,
+    motd: 'Server Offline',
+    version: 'N/A',
+    players: { online: 0, max: 20, list: [] }
+  };
 }
 
 module.exports = {
   checkServerStatus,
   pingBedrockUDP,
   pingViaApi,
-  cleanMinecraftFormatting
+  cleanMinecraftFormatting,
+  isLocalOrPrivateHost
 };
