@@ -8,20 +8,26 @@ module.exports = {
   async execute(interaction, context) {
     const { config } = context;
     const mc = config.mcserver;
+    const deepLink = `minecraft://?addExternalServer=${encodeURIComponent(mc.name)}|${mc.ip}:${mc.port}`;
 
     const embed = new EmbedBuilder()
-      .setColor('#3498DB')
-      .setTitle(`🎮 Cara Bergabung ke ${mc.name}`)
+      .setColor('#2ECC71')
+      .setTitle(`🎮 Cara Bergabung ke Server ${mc.name}`)
       .setDescription([
-        `Salin informasi berikut ke game Minecraft Bedrock Anda:`,
+        `📱 **Masuk Otomatis (Android / iOS / Windows):**`,
+        `👉 **[KLIK DI SINI UNTUK BUKA MINECRAFT OTOMATIS](${deepLink})**`,
         ``,
-        `📡 **Server Name**: \`${mc.name}\``,
-        `🌐 **Server Address**: \`${mc.ip}\``,
-        `🔌 **Port**: \`${mc.port}\``,
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `📋 **Data Server Manual (Salin di bawah):**`,
         ``,
-        `*Catatan untuk pemain Bedrock: Pastikan memasukkan Port ${mc.port} dengan benar, karena port default adalah 19132.*`
+        `📡 **Server Address / IP:** (Ketuk/tahan untuk salin)`,
+        `\`\`\`\n${mc.ip}\n\`\`\``,
+        `🔌 **Port:** (Ketuk/tahan untuk salin)`,
+        `\`\`\`\n${mc.port}\n\`\`\``,
+        `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+        `*Buka Minecraft Bedrock → Play → Servers → Add Server lalu paste data di atas.*`
       ].join('\n'))
-      .setFooter({ text: mc.footerText || 'Minecraft Server' })
+      .setFooter({ text: mc.footerText || 'Minecraft Bedrock Server' })
       .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
@@ -29,7 +35,12 @@ module.exports = {
         .setCustomId('btn_copy_ip')
         .setLabel('Salin IP & Port')
         .setEmoji('📋')
-        .setStyle(ButtonStyle.Primary)
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId('btn_connect_android')
+        .setLabel('Connect (Android)')
+        .setEmoji('🎮')
+        .setStyle(ButtonStyle.Success)
     );
 
     await interaction.reply({

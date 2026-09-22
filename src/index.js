@@ -183,13 +183,17 @@ client.on('interactionCreate', async (interaction) => {
       // Tombol 📋 Salin IP & Port
       if (interaction.customId === 'btn_copy_ip') {
         const mc = config.mcserver;
+        const deepLink = `minecraft://?addExternalServer=${encodeURIComponent(mc.name)}|${mc.ip}:${mc.port}`;
         await interaction.reply({
           content: [
-            `📋 **Informasi Koneksi Server Minecraft:**`,
-            `• **Alamat / IP**: \`${mc.ip}\``,
-            `• **Port**: \`${mc.port}\``,
+            `📋 **Data Server ${mc.name}:**`,
             ``,
-            `*Tinggal salin teks di dalam kotak abu-abu di atas ke game Bedrock Anda!*`
+            `📡 **Alamat Server (Ketuk kotak untuk salin):**`,
+            `\`\`\`\n${mc.ip}\n\`\`\``,
+            `🔌 **Port (Ketuk kotak untuk salin):**`,
+            `\`\`\`\n${mc.port}\n\`\`\``,
+            `📱 **Mau langsung masuk tanpa ketik?**`,
+            `👉 **[KLIK DI SINI UNTUK BUKA MINECRAFT OTOMATIS](${deepLink})**`
           ].join('\n'),
           ephemeral: true
         });
@@ -202,14 +206,15 @@ client.on('interactionCreate', async (interaction) => {
         const deepLink = `minecraft://?addExternalServer=${encodeURIComponent(mc.name)}|${mc.ip}:${mc.port}`;
         await interaction.reply({
           content: [
-            `🎮 **Buka Game Minecraft Bedrock (Android/iOS):**`,
-            `Klik tautan di bawah ini untuk langsung membuka Minecraft dan menambahkan server secara otomatis:`,
-            `👉 **[KLIK DI SINI UNTUK MASUK KE MINECRAFT](${deepLink})**`,
+            `🎮 **Buka Minecraft Otomatis (Android / iOS / Windows):**`,
+            `Klik tautan di bawah ini untuk langsung membuka Minecraft & menambahkan server ke daftar server Anda:`,
             ``,
-            `📋 *Atau masukkan manual ke game:*`,
-            `• **Server Name**: \`${mc.name}\``,
-            `• **Server Address**: \`${mc.ip}\``,
-            `• **Port**: \`${mc.port}\``
+            `👉 **[KLIK DI SINI UNTUK BUKA GAME MINECRAFT](${deepLink})**`,
+            ``,
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+            `📋 **Atau salin manual:**`,
+            `• Alamat IP: \`${mc.ip}\``,
+            `• Port: \`${mc.port}\``
           ].join('\n'),
           ephemeral: true
         });
