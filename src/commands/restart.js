@@ -7,10 +7,14 @@ module.exports = {
     .setDescription('Restart server Minecraft Bedrock di VPS')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
-  async execute(interaction) {
+  async execute(interaction, context) {
     await interaction.deferReply();
 
     const result = await restartServer();
+    if (context?.statusManager) {
+      await context.statusManager.updateStatusEmbed();
+    }
+
     if (result.success) {
       await interaction.editReply({
         content: `🔄 **${result.message}**`

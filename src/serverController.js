@@ -58,7 +58,10 @@ async function startServer() {
   }
 
   const res = await runShell('sudo systemctl start minecraft-bedrock');
-  if (res.success) {
+  await new Promise(r => setTimeout(r, 1000));
+
+  const verify = await isServerRunning();
+  if (verify.running || res.success) {
     return { success: true, message: 'Perintah menyalakan server berhasil dikirim. Server sedang loading...' };
   } else {
     return { success: false, message: `Gagal menyalakan server: ${res.stderr || res.error}` };
@@ -73,17 +76,24 @@ async function stopServer() {
     return { success: false, message: 'Kontrol server hanya tersedia di VPS Linux.' };
   }
 
+  // 1. Matikan via systemctl
+  await runShell('sudo systemctl stop minecraft-bedrock');
+
+  // 2. Beri jeda 1.5 detik agar BDS selesai menulis dan menyimpan world
+  await new Promise(r => setTimeout(r, 1500));
+
+  // 3. Pastikan tidak ada sisa proses manual bedrock_server yang menggantung
+  await runShell('pkill -f bedrock_server');
+
+  // 4. Verifikasi apakah server sudah benar-benar mati
   const check = await isServerRunning();
   if (!check.running) {
-    return { success: false, message: 'Server Minecraft saat ini memang sudah dalam keadaan mati.' };
+    return { success: true, message: 'Server Minecraft berhasil dimatikan secara aman (world tersimpan).' };
   }
 
-  const res = await runShell('sudo systemctl stop minecraft-bedrock');
-  if (res.success) {
-    return { success: true, message: 'Server Minecraft berhasil dimatikan secara aman (world tersimpan).' };
-  } else {
-    return { success: false, message: `Gagal mematikan server: ${res.stderr || res.error}` };
-  }
+  // Jika masih tersisa proses membandel, paksa kill
+  await runShell('pkill -9 -f bedrock_server');
+  return { success: true, message: 'Server Minecraft telah dimatikan.' };
 }
 
 /**

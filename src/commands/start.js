@@ -7,13 +7,17 @@ module.exports = {
     .setDescription('Nyalakan server Minecraft Bedrock di VPS')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
-  async execute(interaction) {
+  async execute(interaction, context) {
     await interaction.deferReply();
 
     const result = await startServer();
+    if (context?.statusManager) {
+      await context.statusManager.updateStatusEmbed();
+    }
+
     if (result.success) {
       await interaction.editReply({
-        content: `🚀 **${result.message}**\nBot akan otomatis mengirimkan notifikasi saat server sudah selesai loading dan online!`
+        content: `🚀 **${result.message}**\nBot akan otomatis mendeteksi dan memperbarui panel status saat server online!`
       });
     } else {
       await interaction.editReply({
