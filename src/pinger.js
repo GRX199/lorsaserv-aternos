@@ -179,6 +179,53 @@ async function pingViaApi(host, port, type = 'bedrock', timeoutMs = 4000) {
 }
 
 /**
+ * Ping server melalui API publik mcsrvstat.us sebagai fallback kedua
+ */
+async function pingViaMcsrvstat(host, port, type = 'bedrock', timeoutMs = 4000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  const endpointType = type.toLowerCase() === 'java' ? '3' : 'bedrock/3';
+  const url = `https://api.mcsrvstat.us/${endpointType}/${encodeURIComponent(host)}:${port}`;
+
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'MinecraftDiscordBot/2.0 (Mozilla/5.0)' }
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.online) return null;
+
+    const motdClean = Array.isArray(data.motd?.clean)
+      ? data.motd.clean.join(' ')
+      : (data.motd?.clean || '');
+
+    return {
+      online: true,
+      source: 'mcsrvstat-api',
+      latencyMs: null,
+      host,
+      port,
+      type,
+      edition: type === 'java' ? 'Java' : 'Bedrock',
+      motd: cleanMinecraftFormatting(motdClean) || 'Minecraft Server',
+      version: data.version || (type === 'java' ? 'Java' : 'Bedrock'),
+      players: {
+        online: data.players?.online || 0,
+        max: data.players?.max || 20,
+        list: (data.players?.list || []).map(p => typeof p === 'string' ? p : p.name)
+      },
+      gamemode: 'Survival'
+    };
+  } catch {
+    clearTimeout(timer);
+    return null;
+  }
+}
+
+/**
  * Fungsi utama untuk mengecek status server Minecraft (Bedrock / Java)
  * Untuk server lokal (127.0.0.1 VPS), hanya menggunakan UDP langsung dan TIDAK PERNAH query mcstatus API
  */
@@ -208,12 +255,23 @@ async function checkServerStatus(host, port = 19132, type = 'bedrock') {
     }
   }
 
-  // 2. Fallback ke mcstatus.io API HANYA jika bukan host lokal (misal untuk domain Aternos)
+  // 2. Fallback ke API publik HANYA jika bukan host lokal (misal untuk domain Aternos)
   if (!isLocal && host !== 'auto') {
+    // 2a. Coba mcstatus.io API
     try {
       const apiResult = await pingViaApi(host, port, type, 4000);
-      return apiResult;
+      if (apiResult && apiResult.online) {
+        return apiResult;
+      }
     } catch (apiErr) {}
+
+    // 2b. Fallback ke mcsrvstat.us API
+    try {
+      const srvStatResult = await pingViaMcsrvstat(host, port, type, 4000);
+      if (srvStatResult && srvStatResult.online) {
+        return srvStatResult;
+      }
+    } catch (srvErr) {}
   }
 
   return {

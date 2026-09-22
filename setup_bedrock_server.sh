@@ -41,19 +41,23 @@ cd "$BEDROCK_DIR"
 
 # 4. Unduh Bedrock Dedicated Server versi resmi terbaru dari Mojang
 echo "[4/6] Mengunduh Minecraft Bedrock Dedicated Server terbaru dari Mojang..."
-DOWNLOAD_URL=$(curl -s https://net-secondary.web.minecraft-services.net/api/v1.0/download/links | jq -r '.result.links[] | select(.downloadType=="serverBedrockLinux") | .downloadUrl')
+if [ ! -f "$BEDROCK_DIR/bedrock_server" ]; then
+    DOWNLOAD_URL=$(curl -s https://net-secondary.web.minecraft-services.net/api/v1.0/download/links | jq -r '.result.links[] | select(.downloadType=="serverBedrockLinux") | .downloadUrl')
 
-if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" == "null" ]; then
-    DOWNLOAD_URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-1.21.60.10.zip"
+    if [ -z "$DOWNLOAD_URL" ] || [ "$DOWNLOAD_URL" == "null" ]; then
+        DOWNLOAD_URL="https://minecraft.azureedge.net/bin-linux/bedrock-server-1.21.60.10.zip"
+    fi
+
+    echo "Mengunduh dari: $DOWNLOAD_URL"
+    wget -q --show-progress -U "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" "$DOWNLOAD_URL" -O bedrock-server.zip
+
+    # Ekstrak file (tanpa menimpa server.properties dan world jika sudah ada)
+    unzip -q -n bedrock-server.zip
+    rm -f bedrock-server.zip
+    chmod +x bedrock_server
+else
+    echo "File bedrock_server sudah ada di $BEDROCK_DIR. Melewati download."
 fi
-
-echo "Mengunduh dari: $DOWNLOAD_URL"
-wget -q --show-progress -U "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" "$DOWNLOAD_URL" -O bedrock-server.zip
-
-# Ekstrak file (tanpa menimpa server.properties dan world jika sudah ada)
-unzip -q -n bedrock-server.zip
-rm -f bedrock-server.zip
-chmod +x bedrock_server
 
 # 5. Optimasi konfigurasi server.properties untuk VPS 2GB RAM
 echo "[5/6] Mengonfigurasi server.properties..."
@@ -73,17 +77,21 @@ sed -i 's/^max-threads=.*/max-threads=4/' server.properties
 # 6. Pasang Service systemd agar server jalan otomatis & bisa dikontrol Bot
 echo "[6/6] Menyiapkan systemd service (minecraft-bedrock.service)..."
 SERVICE_FILE="/etc/systemd/system/minecraft-bedrock.service"
+CURRENT_USER=$(id -un)
+CURRENT_HOME=$(eval echo "~$CURRENT_USER")
+BEDROCK_DIR="$CURRENT_HOME/bedrock-server"
 
-sudo bash -c "cat << 'EOF' > $SERVICE_FILE
+sudo tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
 Description=Minecraft Bedrock Dedicated Server
 After=network.target
 
 [Service]
 Type=simple
-User=$USER
+User=$CURRENT_USER
 WorkingDirectory=$BEDROCK_DIR
-ExecStart=/bin/bash -c \"LD_LIBRARY_PATH=. ./bedrock_server\"
+Environment="LD_LIBRARY_PATH=.:$BEDROCK_DIR"
+ExecStart=$BEDROCK_DIR/bedrock_server
 Restart=on-failure
 RestartSec=5s
 KillSignal=SIGINT
@@ -91,16 +99,18 @@ TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target
-EOF"
+EOF
 
 # Berikan izin sudo tanpa password untuk perintah systemctl minecraft-bedrock agar Bot bisa menyalakan/mematikan server
 SUDOERS_FILE="/etc/sudoers.d/minecraft-bedrock"
-sudo bash -c "echo '$USER ALL=(ALL) NOPASSWD: /bin/systemctl start minecraft-bedrock, /bin/systemctl stop minecraft-bedrock, /bin/systemctl restart minecraft-bedrock, /bin/systemctl is-active minecraft-bedrock' > $SUDOERS_FILE"
+sudo tee "$SUDOERS_FILE" > /dev/null <<EOF
+$CURRENT_USER ALL=(ALL) NOPASSWD: /bin/systemctl start minecraft-bedrock, /bin/systemctl stop minecraft-bedrock, /bin/systemctl restart minecraft-bedrock, /bin/systemctl is-active minecraft-bedrock, /bin/systemctl status minecraft-bedrock
+EOF
 sudo chmod 440 "$SUDOERS_FILE"
 
 sudo systemctl daemon-reload
 sudo systemctl enable minecraft-bedrock
-sudo systemctl start minecraft-bedrock
+sudo systemctl restart minecraft-bedrock || sudo systemctl start minecraft-bedrock
 
 echo ""
 echo "========================================================"
