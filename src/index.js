@@ -84,7 +84,7 @@ async function registerSlashCommands() {
 
 // 5. Jalankan Web Health Server (Sangat penting untuk Render agar tidak crash / sleep)
 const port = process.env.PORT || 3000;
-startHealthServer(port, () => statusManager?.getLatestStatus());
+startHealthServer(port, () => statusManager?.getLatestStatus(), config);
 
 // 6. Event Saat Bot Berhasil Login & Online
 client.once('ready', async () => {
@@ -156,6 +156,26 @@ client.on('interactionCreate', async (interaction) => {
             `• **Port**: \`${mc.port}\``,
             ``,
             `*Tinggal salin teks di dalam kotak abu-abu di atas ke game Bedrock Anda!*`
+          ].join('\n'),
+          ephemeral: true
+        });
+        return;
+      }
+
+      // Tombol 🎮 Connect (Android / iOS)
+      if (interaction.customId === 'btn_connect_android') {
+        const mc = config.mcserver;
+        const deepLink = `minecraft://?addExternalServer=${encodeURIComponent(mc.name)}|${mc.ip}:${mc.port}`;
+        await interaction.reply({
+          content: [
+            `🎮 **Buka Game Minecraft Bedrock (Android/iOS):**`,
+            `Klik tautan di bawah ini untuk langsung membuka Minecraft dan menambahkan server secara otomatis:`,
+            `👉 **[KLIK DI SINI UNTUK MASUK KE MINECRAFT](${deepLink})**`,
+            ``,
+            `📋 *Atau masukkan manual ke game:*`,
+            `• **Server Name**: \`${mc.name}\``,
+            `• **Server Address**: \`${mc.ip}\``,
+            `• **Port**: \`${mc.port}\``
           ].join('\n'),
           ephemeral: true
         });

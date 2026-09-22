@@ -49,6 +49,8 @@ function createStatusEmbed(status, config) {
       description.push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     }
 
+    description.push(`📱 Klik **Connect (Android)** di bawah untuk masuk langsung ke Minecraft!`);
+    description.push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     description.push(`🔄 Diperbarui: <t:${nowUnix}:R>`);
 
     embed.setDescription(description.join('\n'));
@@ -75,36 +77,66 @@ function createStatusEmbed(status, config) {
 }
 
 /**
- * Membuat Action Row berisi tombol interaktif (Nyalakan Server, Refresh, Salin IP)
+ * Membuat Action Row berisi tombol interaktif (Connect Android, Nyalakan Server, Refresh, Salin IP)
  * @param {object} config - Objek konfigurasi
  * @param {boolean} isOnline - Status apakah server sedang online
  */
 function createStatusButtons(config, isOnline = true) {
   const row = new ActionRowBuilder();
+  const mcConfig = config.mcserver || {};
 
-  // Jika server offline, sediakan tombol Nyalakan Server
-  if (!isOnline) {
+  // Jika server online: berikan tombol Connect Android
+  if (isOnline) {
+    if (mcConfig.connectUrl && mcConfig.connectUrl.startsWith('http')) {
+      row.addComponents(
+        new ButtonBuilder()
+          .setStyle(ButtonStyle.Link)
+          .setURL(mcConfig.connectUrl)
+          .setLabel('Buka di Minecraft')
+          .setEmoji('🎮')
+      );
+    } else {
+      row.addComponents(
+        new ButtonBuilder()
+          .setCustomId('btn_connect_android')
+          .setLabel('Connect (Android)')
+          .setEmoji('🎮')
+          .setStyle(ButtonStyle.Success)
+      );
+    }
+
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId('btn_copy_ip')
+        .setLabel('Salin IP & Port')
+        .setEmoji('📋')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId('btn_refresh_status')
+        .setLabel('Perbarui')
+        .setEmoji('🔄')
+        .setStyle(ButtonStyle.Secondary)
+    );
+  } else {
+    // Jika server offline: tombol Nyalakan Server
     row.addComponents(
       new ButtonBuilder()
         .setCustomId('btn_start_server')
         .setLabel('Nyalakan Server')
         .setEmoji('▶')
-        .setStyle(ButtonStyle.Success)
+        .setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId('btn_refresh_status')
+        .setLabel('Perbarui Status')
+        .setEmoji('🔄')
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId('btn_copy_ip')
+        .setLabel('Salin IP & Port')
+        .setEmoji('📋')
+        .setStyle(ButtonStyle.Secondary)
     );
   }
-
-  row.addComponents(
-    new ButtonBuilder()
-      .setCustomId('btn_refresh_status')
-      .setLabel('Perbarui Status')
-      .setEmoji('🔄')
-      .setStyle(isOnline ? ButtonStyle.Success : ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId('btn_copy_ip')
-      .setLabel('Salin IP & Port')
-      .setEmoji('📋')
-      .setStyle(ButtonStyle.Secondary)
-  );
 
   return row;
 }
