@@ -25,22 +25,20 @@ async function isServerRunning() {
     return { available: false, running: false, message: 'Kontrol systemd hanya tersedia di VPS Linux' };
   }
 
-  // 1. Cek via systemctl tanpa sudo (tidak memerlukan password)
+  // 1. Cek via systemctl (tidak memerlukan sudo)
   const sysRes = await runShell('systemctl is-active minecraft-bedrock');
-  let running = sysRes.stdout.toLowerCase().trim() === 'active';
+  const isSysActive = sysRes.stdout.toLowerCase().trim() === 'active';
 
-  // 2. Fallback cek apakah proses binary bedrock_server sedang jalan di background
-  if (!running) {
-    const procRes = await runShell('pgrep -f bedrock_server');
-    if (procRes.stdout && procRes.stdout.trim().length > 0) {
-      running = true;
-    }
-  }
+  // 2. Cek proses binary bedrock_server menggunakan pidof (pidof tidak akan mencocokkan diri sendiri)
+  const procRes = await runShell('pidof bedrock_server');
+  const isProcAlive = Boolean(procRes.stdout && procRes.stdout.trim().length > 0);
+
+  const running = isSysActive || isProcAlive;
 
   return {
     available: true,
     running,
-    statusText: running ? 'active' : sysRes.stdout
+    statusText: running ? (isSysActive ? 'active' : 'running-manual') : (sysRes.stdout || 'inactive')
   };
 }
 
@@ -83,7 +81,7 @@ async function stopServer() {
   await new Promise(r => setTimeout(r, 1500));
 
   // 3. Pastikan tidak ada sisa proses manual bedrock_server yang menggantung
-  await runShell('pkill -f bedrock_server');
+  await runShell('pkill -x bedrock_server || true');
 
   // 4. Verifikasi apakah server sudah benar-benar mati
   const check = await isServerRunning();
@@ -92,7 +90,7 @@ async function stopServer() {
   }
 
   // Jika masih tersisa proses membandel, paksa kill
-  await runShell('pkill -9 -f bedrock_server');
+  await runShell('pkill -9 -x bedrock_server || true');
   return { success: true, message: 'Server Minecraft telah dimatikan.' };
 }
 
