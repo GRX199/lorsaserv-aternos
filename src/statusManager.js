@@ -60,7 +60,7 @@ class StatusManager {
     this.previousOnlineState = status.online;
 
     const embed = createStatusEmbed(status, this.config);
-    const buttons = createStatusButtons(this.config);
+    const buttons = createStatusButtons(this.config, Boolean(status?.online));
 
     const message = await channel.send({
       embeds: [embed],
@@ -113,7 +113,7 @@ class StatusManager {
 
     const payload = {
       embeds: [embed],
-      components: [createStatusButtons(this.config)]
+      components: [createStatusButtons(this.config, isOnline)]
     };
 
     if (alertConfig.mention && alertConfig.mention.trim() !== '') {
@@ -169,7 +169,7 @@ class StatusManager {
       }
 
       const embed = createStatusEmbed(status, this.config);
-      const buttons = createStatusButtons(this.config);
+      const buttons = createStatusButtons(this.config, Boolean(status?.online));
 
       let message = null;
       if (this.state.statusMessageId) {

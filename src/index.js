@@ -133,6 +133,19 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
 
+      // Tombol ▶ Nyalakan Server
+      if (interaction.customId === 'btn_start_server') {
+        await interaction.deferReply({ ephemeral: true });
+        const { startServer } = require('./serverController');
+        const res = await startServer();
+        await interaction.editReply({
+          content: res.success
+            ? `🚀 **${res.message}**\nBot akan otomatis mendeteksi dan mengirimkan notifikasi saat server sudah online!`
+            : `⚠️ ${res.message}`
+        });
+        return;
+      }
+
       // Tombol 📋 Salin IP & Port
       if (interaction.customId === 'btn_copy_ip') {
         const mc = config.mcserver;

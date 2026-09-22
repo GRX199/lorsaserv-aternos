@@ -60,8 +60,8 @@ function createStatusEmbed(status, config) {
       `📡 **Alamat Host**: \`${mcConfig.ip}\``,
       `🔌 **Port Bedrock**: \`${mcConfig.port}\``,
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-      `⚠️ *Server saat ini sedang mati atau sedang dimulai di Aternos.*`,
-      `Silakan nyalakan server di Aternos terlebih dahulu jika ingin bermain!`,
+      `⚠️ *Server saat ini sedang offline.*`,
+      `Klik tombol **▶ Nyalakan Server** di bawah untuk menyalakan server!`,
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
       `🔄 Diperbarui: <t:${nowUnix}:R>`
     ].join('\n'));
@@ -75,16 +75,30 @@ function createStatusEmbed(status, config) {
 }
 
 /**
- * Membuat Action Row berisi tombol interaktif (Refresh, Salin IP)
+ * Membuat Action Row berisi tombol interaktif (Nyalakan Server, Refresh, Salin IP)
  * @param {object} config - Objek konfigurasi
+ * @param {boolean} isOnline - Status apakah server sedang online
  */
-function createStatusButtons(config) {
-  const row = new ActionRowBuilder().addComponents(
+function createStatusButtons(config, isOnline = true) {
+  const row = new ActionRowBuilder();
+
+  // Jika server offline, sediakan tombol Nyalakan Server
+  if (!isOnline) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId('btn_start_server')
+        .setLabel('Nyalakan Server')
+        .setEmoji('▶')
+        .setStyle(ButtonStyle.Success)
+    );
+  }
+
+  row.addComponents(
     new ButtonBuilder()
       .setCustomId('btn_refresh_status')
       .setLabel('Perbarui Status')
       .setEmoji('🔄')
-      .setStyle(ButtonStyle.Success),
+      .setStyle(isOnline ? ButtonStyle.Success : ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId('btn_copy_ip')
       .setLabel('Salin IP & Port')
