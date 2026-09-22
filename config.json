@@ -1,12 +1,31 @@
 {
+  "servers": [
+    {
+      "id": "vps",
+      "name": "SASY199 • VPS TENCENT (24/7)",
+      "ip": "auto",
+      "port": 19132,
+      "type": "bedrock",
+      "isLocal": true,
+      "icon": "https://i.imgur.com/6Msem8Q.png"
+    },
+    {
+      "id": "aternos",
+      "name": "SASY199 • ATERNOS",
+      "ip": "sasy199.aternos.me",
+      "port": 19132,
+      "type": "bedrock",
+      "isLocal": false,
+      "icon": "https://i.imgur.com/6Msem8Q.png"
+    }
+  ],
   "mcserver": {
     "ip": "sasy199.aternos.me",
     "port": 19132,
     "type": "bedrock",
     "name": "sasy199",
-    "autoPublicIp": true,
     "icon": "https://i.imgur.com/6Msem8Q.png",
-    "footerText": "Minecraft Bedrock Server • Tencent Cloud VPS 24/7"
+    "footerText": "Minecraft Bedrock Server Monitor • 24/7"
   },
   "intervals": {
     "statusEmbedSeconds": 45,
@@ -17,14 +36,14 @@
       "enabled": true,
       "mention": "@everyone",
       "channelId": "",
-      "title": "🎉 Server Minecraft Sudah ONLINE!",
+      "title": "🎉 Server {name} Sudah ONLINE!",
       "message": "Server **{name}** sudah aktif dan siap dimainkan! Ayo masuk sekarang!"
     },
     "offlineAlert": {
       "enabled": false,
       "mention": "",
       "channelId": "",
-      "title": "🔴 Server Minecraft Telah Offline",
+      "title": "🔴 Server {name} Telah Offline",
       "message": "Server **{name}** saat ini telah mati."
     }
   },

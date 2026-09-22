@@ -10,8 +10,8 @@ class StatusManager {
   constructor(client, config) {
     this.client = client;
     this.config = config;
-    this.latestStatus = null;
-    this.previousOnlineState = null;
+    this.serverStatuses = {};
+    this.previousOnlineStates = {};
     this.statusTimer = null;
     this.channelNameTimer = null;
     this.lastChannelName = null;
@@ -19,16 +19,39 @@ class StatusManager {
     this.state = this.loadState();
   }
 
+  getServers() {
+    if (this.config.servers && Array.isArray(this.config.servers) && this.config.servers.length > 0) {
+      return this.config.servers;
+    }
+    return [{
+      id: 'main',
+      name: this.config.mcserver?.name || 'Minecraft Server',
+      ip: this.config.mcserver?.ip || '127.0.0.1',
+      port: this.config.mcserver?.port || 19132,
+      type: this.config.mcserver?.type || 'bedrock',
+      isLocal: process.platform === 'linux',
+      icon: this.config.mcserver?.icon || null
+    }];
+  }
+
   loadState() {
     try {
       if (fs.existsSync(STATE_FILE_PATH)) {
         const raw = fs.readFileSync(STATE_FILE_PATH, 'utf8');
-        return JSON.parse(raw);
+        const data = JSON.parse(raw);
+        if (!data.serverMessages) {
+          data.serverMessages = {};
+          if (data.statusMessageId) {
+            data.serverMessages['main'] = data.statusMessageId;
+            data.serverMessages['vps'] = data.statusMessageId;
+          }
+        }
+        return data;
       }
     } catch (err) {
       console.error('[StatusManager] Gagal membaca state.json:', err.message);
     }
-    return { statusMessageId: null, statusChannelId: null };
+    return { serverMessages: {}, statusChannelId: null };
   }
 
   saveState() {
@@ -44,40 +67,44 @@ class StatusManager {
   }
 
   getLatestStatus() {
-    return this.latestStatus;
+    const servers = this.getServers();
+    const vpsServer = servers.find(s => s.id === 'vps') || servers[0];
+    return this.serverStatuses[vpsServer.id] || null;
   }
 
   /**
-   * Menyiapkan live status message di channel tertentu (dipanggil oleh /setup-status)
+   * Menyiapkan live status messages di channel tertentu (dipanggil oleh /setup-status)
    */
   async setupStatusMessage(channel) {
-    const status = await checkServerStatus(
-      this.config.mcserver.pingHost || this.config.mcserver.ip,
-      this.config.mcserver.port,
-      this.config.mcserver.type
-    );
-    this.latestStatus = status;
-    this.previousOnlineState = status.online;
-
-    const embed = createStatusEmbed(status, this.config);
-    const buttons = createStatusButtons(this.config, Boolean(status?.online));
-
-    const message = await channel.send({
-      embeds: [embed],
-      components: [buttons]
-    });
-
+    const servers = this.getServers();
     this.state.statusChannelId = channel.id;
-    this.state.statusMessageId = message.id;
-    this.saveState();
+    this.state.serverMessages = this.state.serverMessages || {};
 
-    return message;
+    for (const s of servers) {
+      const pingHost = (s.isLocal && process.platform === 'linux') ? '127.0.0.1' : s.ip;
+      const status = await checkServerStatus(pingHost, s.port, s.type);
+      this.serverStatuses[s.id] = status;
+      this.previousOnlineStates[s.id] = status.online;
+
+      const embed = createStatusEmbed(status, s, this.config);
+      const buttons = createStatusButtons(s, Boolean(status?.online));
+
+      const message = await channel.send({
+        embeds: [embed],
+        components: [buttons]
+      });
+
+      this.state.serverMessages[s.id] = message.id;
+    }
+
+    this.saveState();
+    return true;
   }
 
   /**
    * Mengirim notifikasi chat ketika server baru saja Online atau Offline
    */
-  async sendNotification(alertType, status) {
+  async sendNotification(alertType, serverConfig, status) {
     const alertConfig = this.config.notifications?.[alertType];
     if (!alertConfig || !alertConfig.enabled) return;
 
@@ -87,33 +114,29 @@ class StatusManager {
     const channel = await this.client.channels.fetch(channelId).catch(() => null);
     if (!channel || !channel.isTextBased()) return;
 
-    const mc = this.config.mcserver;
     const isOnline = alertType === 'onlineAlert';
+    const serverName = serverConfig.name;
 
     const embed = new EmbedBuilder()
       .setColor(isOnline ? (this.config.display?.colorOnline || '#2ECC71') : (this.config.display?.colorOffline || '#E74C3C'))
-      .setTitle(alertConfig.title || (isOnline ? '🎉 Server Minecraft Online!' : '🔴 Server Minecraft Offline'))
+      .setTitle((alertConfig.title || '🎉 Server {name} Sudah Online!').replace('{name}', serverName))
       .setDescription(
-        (alertConfig.message || '')
-          .replace('{name}', mc.name)
-          .replace('{ip}', mc.ip)
-          .replace('{port}', mc.port)
+        (alertConfig.message || 'Server **{name}** sudah aktif!')
+          .replace(/{name}/g, serverName)
+          .replace(/{ip}/g, serverConfig.ip)
+          .replace(/{port}/g, serverConfig.port)
       )
       .addFields(
-        { name: '📡 Alamat Server', value: `\`${mc.ip}\``, inline: true },
-        { name: '🔌 Port Bedrock', value: `\`${mc.port}\``, inline: true },
+        { name: '📡 Alamat Server', value: `\`${serverConfig.ip}\``, inline: true },
+        { name: '🔌 Port Bedrock', value: `\`${serverConfig.port}\``, inline: true },
         { name: '👥 Pemain', value: `\`${status.players?.online || 0} / ${status.players?.max || 20}\``, inline: true }
       )
-      .setThumbnail(mc.icon || null)
+      .setThumbnail(serverConfig.icon || null)
       .setTimestamp();
-
-    if (mc.footerText) {
-      embed.setFooter({ text: mc.footerText, iconURL: mc.icon || undefined });
-    }
 
     const payload = {
       embeds: [embed],
-      components: [createStatusButtons(this.config, isOnline)]
+      components: [createStatusButtons(serverConfig, isOnline)]
     };
 
     if (alertConfig.mention && alertConfig.mention.trim() !== '') {
@@ -121,84 +144,83 @@ class StatusManager {
     }
 
     await channel.send(payload).catch((err) => {
-      console.warn(`[StatusManager] Gagal kirim notifikasi ${alertType}:`, err.message);
+      console.warn(`[StatusManager] Gagal kirim notifikasi ${alertType} untuk ${serverName}:`, err.message);
     });
 
-    console.log(`[StatusManager] Berhasil mengirim notifikasi ${alertType} ke channel ${channel.name}!`);
+    console.log(`[StatusManager] Berhasil mengirim notifikasi ${alertType} untuk ${serverName}!`);
   }
 
   /**
-   * Memperbarui embed status message
+   * Memperbarui embed status messages untuk semua server
    */
   async updateStatusEmbed() {
     if (this.isUpdating) return;
     this.isUpdating = true;
 
     try {
-      const status = await checkServerStatus(
-        this.config.mcserver.pingHost || this.config.mcserver.ip,
-        this.config.mcserver.port,
-        this.config.mcserver.type
-      );
-      this.latestStatus = status;
-
-      // 1. Deteksi perubahan status Online/Offline untuk notifikasi
-      if (this.previousOnlineState !== null) {
-        if (this.previousOnlineState === false && status.online === true) {
-          console.log('[StatusManager] Terdeteksi server berubah status: OFFLINE -> ONLINE! Mengirim notifikasi...');
-          await this.sendNotification('onlineAlert', status);
-        } else if (this.previousOnlineState === true && status.online === false) {
-          console.log('[StatusManager] Terdeteksi server berubah status: ONLINE -> OFFLINE!');
-          await this.sendNotification('offlineAlert', status);
-        }
-      }
-      this.previousOnlineState = status.online;
-
-      // 2. Update Bot Presence
-      this.updatePresence(status);
-
-      // 3. Tentukan Channel ID untuk Live Status Panel
+      const servers = this.getServers();
       const channelId = process.env.STATUS_CHANNEL_ID || this.state.statusChannelId;
-      if (!channelId) {
-        return;
-      }
+      const channel = channelId ? await this.client.channels.fetch(channelId).catch(() => null) : null;
 
-      const channel = await this.client.channels.fetch(channelId).catch(() => null);
-      if (!channel || !channel.isTextBased()) {
-        return;
-      }
+      this.state.serverMessages = this.state.serverMessages || {};
 
-      const embed = createStatusEmbed(status, this.config);
-      const buttons = createStatusButtons(this.config, Boolean(status?.online));
+      for (const s of servers) {
+        const pingHost = (s.isLocal && process.platform === 'linux') ? '127.0.0.1' : s.ip;
+        const status = await checkServerStatus(pingHost, s.port, s.type);
+        this.serverStatuses[s.id] = status;
 
-      let message = null;
-      if (this.state.statusMessageId) {
-        message = await channel.messages.fetch(this.state.statusMessageId).catch(() => null);
-      }
+        // 1. Deteksi perubahan status Online/Offline untuk notifikasi
+        const prev = this.previousOnlineStates[s.id];
+        if (prev !== undefined && prev !== null) {
+          if (prev === false && status.online === true) {
+            console.log(`[StatusManager] Server ${s.name} berubah: OFFLINE -> ONLINE!`);
+            await this.sendNotification('onlineAlert', s, status);
+          } else if (prev === true && status.online === false) {
+            console.log(`[StatusManager] Server ${s.name} berubah: ONLINE -> OFFLINE!`);
+            await this.sendNotification('offlineAlert', s, status);
+          }
+        }
+        this.previousOnlineStates[s.id] = status.online;
 
-      if (message) {
-        await message.edit({
-          embeds: [embed],
-          components: [buttons]
-        }).catch((err) => {
-          console.warn('[StatusManager] Gagal edit status message:', err.message);
-        });
-      } else {
-        // Jika pesan belum ada atau telah dihapus, buat pesan baru
-        const newMessage = await channel.send({
-          embeds: [embed],
-          components: [buttons]
-        }).catch((err) => {
-          console.warn('[StatusManager] Gagal kirim status message baru:', err.message);
-          return null;
-        });
+        // 2. Update atau kirim Embed Message di Discord channel
+        if (channel && channel.isTextBased()) {
+          const embed = createStatusEmbed(status, s, this.config);
+          const buttons = createStatusButtons(s, Boolean(status?.online));
 
-        if (newMessage) {
-          this.state.statusChannelId = channel.id;
-          this.state.statusMessageId = newMessage.id;
-          this.saveState();
+          let message = null;
+          const msgId = this.state.serverMessages[s.id];
+          if (msgId) {
+            message = await channel.messages.fetch(msgId).catch(() => null);
+          }
+
+          if (message) {
+            await message.edit({
+              embeds: [embed],
+              components: [buttons]
+            }).catch((err) => {
+              console.warn(`[StatusManager] Gagal edit message untuk ${s.name}:`, err.message);
+            });
+          } else {
+            const newMsg = await channel.send({
+              embeds: [embed],
+              components: [buttons]
+            }).catch((err) => {
+              console.warn(`[StatusManager] Gagal kirim message baru untuk ${s.name}:`, err.message);
+              return null;
+            });
+
+            if (newMsg) {
+              this.state.statusChannelId = channel.id;
+              this.state.serverMessages[s.id] = newMsg.id;
+              this.saveState();
+            }
+          }
         }
       }
+
+      // 3. Update Bot Presence
+      this.updatePresence();
+
     } catch (err) {
       console.error('[StatusManager] Error saat updateStatusEmbed:', err.message);
     } finally {
@@ -209,26 +231,33 @@ class StatusManager {
   /**
    * Mengupdate presence / activity bot di profil Discord
    */
-  updatePresence(status) {
+  updatePresence() {
     if (!this.client.user) return;
 
     try {
-      if (status && status.online) {
-        const text = (this.config.display?.presenceOnline || '👥 {online}/{max} pemain online')
-          .replace('{online}', status.players?.online || 0)
-          .replace('{max}', status.players?.max || 20);
+      const servers = this.getServers();
+      const vps = servers.find(s => s.id === 'vps');
+      const aternos = servers.find(s => s.id === 'aternos');
 
-        this.client.user.setPresence({
-          status: 'online',
-          activities: [{ name: text, type: ActivityType.Custom }]
-        });
+      const vpsStatus = vps ? this.serverStatuses[vps.id] : null;
+      const aternosStatus = aternos ? this.serverStatuses[aternos.id] : null;
+
+      let presenceText = '';
+      if (vpsStatus && vpsStatus.online) {
+        presenceText = `VPS: 🟢 ${vpsStatus.players?.online || 0} pemain`;
+        if (aternosStatus && aternosStatus.online) {
+          presenceText += ` | Aternos: 🟢 ${aternosStatus.players?.online || 0}`;
+        }
+      } else if (aternosStatus && aternosStatus.online) {
+        presenceText = `Aternos: 🟢 ${aternosStatus.players?.online || 0} pemain`;
       } else {
-        const text = this.config.display?.presenceOffline || '🔴 Server Offline';
-        this.client.user.setPresence({
-          status: 'idle',
-          activities: [{ name: text, type: ActivityType.Custom }]
-        });
+        presenceText = '🔴 Server Offline';
       }
+
+      this.client.user.setPresence({
+        status: (vpsStatus?.online || aternosStatus?.online) ? 'online' : 'idle',
+        activities: [{ name: presenceText, type: ActivityType.Custom }]
+      });
     } catch (err) {
       console.warn('[StatusManager] Gagal update presence:', err.message);
     }
@@ -245,27 +274,25 @@ class StatusManager {
       const channel = await this.client.channels.fetch(channelId).catch(() => null);
       if (!channel) return;
 
-      const status = this.latestStatus || await checkServerStatus(
-        this.config.mcserver.pingHost || this.config.mcserver.ip,
-        this.config.mcserver.port,
-        this.config.mcserver.type
-      );
+      const servers = this.getServers();
+      const vps = servers.find(s => s.id === 'vps') || servers[0];
+      const status = this.serverStatuses[vps.id];
 
       let targetName = '';
       if (status && status.online) {
         targetName = (this.config.display?.onlineChannelName || '🟢・{online}/{max}-online')
           .replace('{online}', status.players?.online || 0)
-          .replace('{max}', status.players?.max || 20);
+          .replace('{max}', status.players?.max || 10);
       } else {
         targetName = this.config.display?.offlineChannelName || '🔴・offline';
       }
 
       if (this.lastChannelName === targetName || channel.name === targetName) {
-        return; // Nama sudah sama, hindari rate-limit Discord
+        return;
       }
 
       await channel.setName(targetName).catch((err) => {
-        console.warn('[StatusManager] Gagal mengganti nama channel (kemungkinan rate limit Discord):', err.message);
+        console.warn('[StatusManager] Gagal mengganti nama channel:', err.message);
       });
 
       this.lastChannelName = targetName;
@@ -278,13 +305,12 @@ class StatusManager {
    * Memulai interval update otomatis
    */
   start() {
-    const embedSec = Math.max(30, this.config.intervals?.statusEmbedSeconds || 60);
+    const embedSec = Math.max(30, this.config.intervals?.statusEmbedSeconds || 45);
     const channelMin = Math.max(5, this.config.intervals?.channelNameMinutes || 5);
 
-    console.log(`[StatusManager] Memulai loop update embed setiap ${embedSec} detik.`);
+    console.log(`[StatusManager] Memulai loop update embed multi-server setiap ${embedSec} detik.`);
     console.log(`[StatusManager] Memulai loop channel name setiap ${channelMin} menit.`);
 
-    // Jalankan segera saat pertama kali start
     this.updateStatusEmbed();
     this.updatePlayerCountChannel();
 

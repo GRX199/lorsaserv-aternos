@@ -87,33 +87,38 @@ const port = process.env.PORT || 3000;
 startHealthServer(port, () => statusManager?.getLatestStatus(), config);
 
 async function initServerConfig(cfg) {
-  // Jika SERVER_IP ditentukan di .env, prioritaskan
+  let publicIp = null;
   if (process.env.SERVER_IP && process.env.SERVER_IP.trim()) {
-    cfg.mcserver.ip = process.env.SERVER_IP.trim();
-    console.log(`[Config] Menggunakan SERVER_IP dari .env: ${cfg.mcserver.ip}`);
-  } else if (cfg.mcserver.autoPublicIp !== false) {
-    // Coba ambil IP publik VPS secara otomatis
+    publicIp = process.env.SERVER_IP.trim();
+    console.log(`[Config] Menggunakan SERVER_IP dari .env: ${publicIp}`);
+  } else {
     try {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 4000);
       const res = await fetch('https://api.ipify.org', { signal: controller.signal });
       clearTimeout(timer);
       if (res.ok) {
-        const publicIp = (await res.text()).trim();
-        if (publicIp && publicIp.length >= 7) {
-          cfg.mcserver.ip = publicIp;
-          console.log(`[Config] Otomatis mendeteksi IP Publik VPS: ${publicIp}`);
-        }
+        publicIp = (await res.text()).trim();
       }
     } catch (err) {
       console.warn(`[Config] Gagal deteksi IP publik otomatis: ${err.message}`);
     }
   }
 
-  // Jika di Linux dan bedrock-server berjalan lokal di VPS, set pingHost ke 127.0.0.1
-  if (process.platform === 'linux') {
+  if (cfg.mcserver && publicIp) {
+    cfg.mcserver.ip = publicIp;
+  }
+
+  if (cfg.servers && Array.isArray(cfg.servers)) {
+    const vps = cfg.servers.find(s => s.id === 'vps' || s.isLocal);
+    if (vps && publicIp) {
+      vps.ip = publicIp;
+      console.log(`[Config] Otomatis mendeteksi IP Publik VPS untuk ${vps.name}: ${publicIp}`);
+    }
+  }
+
+  if (process.platform === 'linux' && cfg.mcserver) {
     cfg.mcserver.pingHost = '127.0.0.1';
-    console.log('[Config] Berjalan di VPS Linux: memantau server Minecraft lokal (127.0.0.1:19132)');
   }
 }
 
@@ -180,18 +185,21 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
 
-      // Tombol 📋 Salin IP & Port
-      if (interaction.customId === 'btn_copy_ip') {
-        const mc = config.mcserver;
-        const deepLink = `minecraft://?addExternalServer=${encodeURIComponent(mc.name)}|${mc.ip}:${mc.port}`;
+      // Tombol 📋 Salin IP & Port (Mendukung multi-server)
+      if (interaction.customId.startsWith('btn_copy_ip')) {
+        const sId = interaction.customId.replace('btn_copy_ip_', '').replace('btn_copy_ip', '');
+        const servers = statusManager ? statusManager.getServers() : (config.servers || [config.mcserver]);
+        const target = servers.find(s => s.id === sId) || servers[0];
+        const deepLink = `minecraft://?addExternalServer=${encodeURIComponent(target.name)}|${target.ip}:${target.port}`;
+
         await interaction.reply({
           content: [
-            `📋 **Data Server ${mc.name}:**`,
+            `📋 **Data Server ${target.name}:**`,
             ``,
             `📡 **Alamat Server (Ketuk kotak untuk salin):**`,
-            `\`\`\`\n${mc.ip}\n\`\`\``,
+            `\`\`\`\n${target.ip}\n\`\`\``,
             `🔌 **Port (Ketuk kotak untuk salin):**`,
-            `\`\`\`\n${mc.port}\n\`\`\``,
+            `\`\`\`\n${target.port}\n\`\`\``,
             `📱 **Mau langsung masuk tanpa ketik?**`,
             `👉 **[KLIK DI SINI UNTUK BUKA MINECRAFT OTOMATIS](${deepLink})**`
           ].join('\n'),
@@ -200,21 +208,24 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
 
-      // Tombol 🎮 Connect (Android / iOS)
-      if (interaction.customId === 'btn_connect_android') {
-        const mc = config.mcserver;
-        const deepLink = `minecraft://?addExternalServer=${encodeURIComponent(mc.name)}|${mc.ip}:${mc.port}`;
+      // Tombol 🎮 Connect (Android / iOS - Mendukung multi-server)
+      if (interaction.customId.startsWith('btn_connect_android')) {
+        const sId = interaction.customId.replace('btn_connect_android_', '').replace('btn_connect_android', '');
+        const servers = statusManager ? statusManager.getServers() : (config.servers || [config.mcserver]);
+        const target = servers.find(s => s.id === sId) || servers[0];
+        const deepLink = `minecraft://?addExternalServer=${encodeURIComponent(target.name)}|${target.ip}:${target.port}`;
+
         await interaction.reply({
           content: [
-            `🎮 **Buka Minecraft Otomatis (Android / iOS / Windows):**`,
-            `Klik tautan di bawah ini untuk langsung membuka Minecraft & menambahkan server ke daftar server Anda:`,
+            `🎮 **Buka Game ${target.name} Otomatis:**`,
+            `Klik tautan di bawah ini untuk langsung membuka Minecraft & menambahkan server ke game Anda:`,
             ``,
             `👉 **[KLIK DI SINI UNTUK BUKA GAME MINECRAFT](${deepLink})**`,
             ``,
             `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
             `📋 **Atau salin manual:**`,
-            `• Alamat IP: \`${mc.ip}\``,
-            `• Port: \`${mc.port}\``
+            `• Alamat IP: \`${target.ip}\``,
+            `• Port: \`${target.port}\``
           ].join('\n'),
           ephemeral: true
         });
