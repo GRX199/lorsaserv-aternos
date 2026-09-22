@@ -1,0 +1,182 @@
+require('dotenv').config();
+const fs = require('node:fs');
+const path = require('node:path');
+const {
+  Client,
+  GatewayIntentBits,
+  Collection,
+  REST,
+  Routes
+} = require('discord.js');
+
+const { startHealthServer } = require('./server');
+const { StatusManager } = require('./statusManager');
+
+// 1. Baca Konfigurasi config.json
+const configPath = path.join(__dirname, '..', 'config.json');
+let config = {};
+try {
+  config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+} catch (err) {
+  console.error('[Main] Gagal membaca config.json:', err.message);
+  process.exit(1);
+}
+
+// 2. Inisialisasi Discord Client
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds]
+});
+
+client.commands = new Collection();
+let statusManager = null;
+
+// 3. Muat Slash Commands dari folder src/commands
+const commands = [];
+const commandsPath = path.join(__dirname, 'commands');
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+
+for (const file of commandFiles) {
+  const filePath = path.join(commandsPath, file);
+  const command = require(filePath);
+  if ('data' in command && 'execute' in command) {
+    client.commands.set(command.data.name, command);
+    commands.push(command.data.toJSON());
+  } else {
+    console.warn(`[Main] Command di ${filePath} tidak memiliki properti 'data' atau 'execute'.`);
+  }
+}
+
+// 4. Daftarkan Slash Commands ke Discord API
+async function registerSlashCommands() {
+  const token = process.env.DISCORD_TOKEN;
+  const clientId = process.env.CLIENT_ID;
+  const guildId = process.env.GUILD_ID;
+
+  if (!token || !clientId) {
+    console.warn('[Slash Commands] DISCORD_TOKEN atau CLIENT_ID belum diisi di .env. Slash commands dilewati.');
+    return;
+  }
+
+  const rest = new REST({ version: '10' }).setToken(token);
+
+  try {
+    console.log(`[Slash Commands] Mulai mendaftarkan ${commands.length} slash command...`);
+
+    if (guildId) {
+      // Daftar ke server tertentu (Instan tanpa delay)
+      await rest.put(
+        Routes.applicationGuildCommands(clientId, guildId),
+        { body: commands }
+      );
+      console.log(`[Slash Commands] Berhasil didaftarkan ke server (Guild ID: ${guildId})!`);
+    } else {
+      // Daftar global (bisa butuh beberapa menit sinkronisasi di Discord)
+      await rest.put(
+        Routes.applicationCommands(clientId),
+        { body: commands }
+      );
+      console.log('[Slash Commands] Berhasil didaftarkan secara GLOBAL!');
+    }
+  } catch (err) {
+    console.error('[Slash Commands] Gagal mendaftarkan commands:', err.message);
+  }
+}
+
+// 5. Jalankan Web Health Server (Sangat penting untuk Render agar tidak crash / sleep)
+const port = process.env.PORT || 3000;
+startHealthServer(port, () => statusManager?.getLatestStatus());
+
+// 6. Event Saat Bot Berhasil Login & Online
+client.once('ready', async () => {
+  console.log(`=========================================`);
+  console.log(`🤖 Bot Discord Berhasil Login: ${client.user.tag}`);
+  console.log(`🎮 Server Target: ${config.mcserver.name} (${config.mcserver.ip}:${config.mcserver.port})`);
+  console.log(`=========================================`);
+
+  // Registrasi slash command
+  await registerSlashCommands();
+
+  // Inisialisasi & jalankan StatusManager
+  statusManager = new StatusManager(client, config);
+  statusManager.start();
+});
+
+// 7. Event Listener Interaksi (Slash Commands & Tombol)
+client.on('interactionCreate', async (interaction) => {
+  try {
+    // A. Interaksi Slash Command
+    if (interaction.isChatInputCommand()) {
+      const command = client.commands.get(interaction.commandName);
+      if (!command) return;
+
+      const context = {
+        config,
+        statusManager,
+        client
+      };
+
+      await command.execute(interaction, context);
+      return;
+    }
+
+    // B. Interaksi Tombol (Button)
+    if (interaction.isButton()) {
+      // Tombol 🔄 Refresh Status
+      if (interaction.customId === 'btn_refresh_status') {
+        await interaction.deferReply({ ephemeral: true });
+        if (statusManager) {
+          await statusManager.updateStatusEmbed();
+        }
+        await interaction.editReply({
+          content: '✅ Status server Minecraft berhasil diperbarui secara instan!'
+        });
+        return;
+      }
+
+      // Tombol 📋 Salin IP & Port
+      if (interaction.customId === 'btn_copy_ip') {
+        const mc = config.mcserver;
+        await interaction.reply({
+          content: [
+            `📋 **Informasi Koneksi Server Minecraft:**`,
+            `• **Alamat / IP**: \`${mc.ip}\``,
+            `• **Port**: \`${mc.port}\``,
+            ``,
+            `*Tinggal salin teks di dalam kotak abu-abu di atas ke game Bedrock Anda!*`
+          ].join('\n'),
+          ephemeral: true
+        });
+        return;
+      }
+    }
+  } catch (err) {
+    console.error('[Interaction] Error saat menangani interaksi:', err);
+    if (interaction.isRepliable()) {
+      const replyFn = interaction.deferred || interaction.replied ? 'followUp' : 'reply';
+      await interaction[replyFn]({
+        content: 'Terjadi kesalahan saat memproses aksi ini.',
+        ephemeral: true
+      }).catch(() => {});
+    }
+  }
+});
+
+// 8. Error Handling Global agar Bot Tidak Pernah Mati Sendiri
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Anti-Crash] Unhandled Rejection pada:', promise, 'alasan:', reason);
+});
+
+process.on('uncaughtException', (err, origin) => {
+  console.error('[Anti-Crash] Uncaught Exception:', err, 'asal:', origin);
+});
+
+// 9. Login ke Discord
+const token = process.env.DISCORD_TOKEN;
+if (!token || token === 'MASUKKAN_TOKEN_BOT_DISCORD_ANDA_DI_SINI') {
+  console.warn('\n⚠️  PERINGATAN: DISCORD_TOKEN belum diatur!');
+  console.warn('Silakan salin file .env.example menjadi .env dan masukkan Token bot Anda.\n');
+} else {
+  client.login(token).catch((err) => {
+    console.error('[Login Error] Gagal login ke Discord:', err.message);
+  });
+}

@@ -1,0 +1,22 @@
+{
+  "mcserver": {
+    "ip": "nindaminecraft.aternos.me",
+    "port": 19132,
+    "type": "bedrock",
+    "name": "NINDA SMP",
+    "icon": "https://i.imgur.com/6Msem8Q.png",
+    "footerText": "Minecraft Bedrock Server Monitor • Aternos Safe Ping"
+  },
+  "intervals": {
+    "statusEmbedSeconds": 45,
+    "channelNameMinutes": 5
+  },
+  "display": {
+    "colorOnline": "#2ECC71",
+    "colorOffline": "#E74C3C",
+    "onlineChannelName": "🟢・{online}/{max}-online",
+    "offlineChannelName": "🔴・offline",
+    "presenceOnline": "👥 {online}/{max} pemain online",
+    "presenceOffline": "🔴 Server Offline"
+  }
+}

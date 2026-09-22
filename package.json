@@ -1,0 +1,27 @@
+{
+  "name": "aternos-bedrock-discord-bot",
+  "version": "1.0.0",
+  "description": "Discord Bot pemantau status otomatis server Minecraft Bedrock (Aternos) dengan live panel & channel counter.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [
+    "discord-bot",
+    "minecraft",
+    "bedrock",
+    "aternos",
+    "status",
+    "server-status"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.17.3",
+    "dotenv": "^16.4.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

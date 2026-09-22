@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: minecraft-bedrock-discord-bot
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 22.19.0
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: CLIENT_ID
+        sync: false
+      - key: STATUS_CHANNEL_ID
+        sync: false
+      - key: PLAYER_COUNT_CHANNEL_ID
+        sync: false
