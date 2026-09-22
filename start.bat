@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 title Minecraft Bedrock Discord Status Bot
 color 0A
 
@@ -8,7 +9,7 @@ echo ========================================================
 echo.
 
 where node >nul 2>nul
-if %errorlevel% neq 0 (
+if errorlevel 1 (
     echo [ERROR] Node.js tidak ditemukan!
     echo Silakan install Node.js versi 18 ke atas dari https://nodejs.org/
     echo.
@@ -17,7 +18,7 @@ if %errorlevel% neq 0 (
 )
 
 if not exist node_modules (
-    echo [INFO] Mengunduh dependensi (npm install)...
+    echo [INFO] Mengunduh dependensi npm install...
     call npm install
     echo.
 )
@@ -38,10 +39,8 @@ if not exist .env (
 
 echo [INFO] Menjalankan Bot Discord...
 echo.
-npm start
+node src/index.js
 
-if %errorlevel% neq 0 (
-    echo.
-    echo [ERROR] Bot berhenti dengan error.
-    pause
-)
+echo.
+echo [INFO] Bot berhenti.
+pause
