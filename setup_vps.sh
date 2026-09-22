@@ -6,19 +6,40 @@ echo "  MEMASANG MINECRAFT DISCORD STATUS BOT DI VPS TENCENT  "
 echo "========================================================"
 echo ""
 
-# Input konfigurasi dengan aman
-if [ -z "$DISCORD_TOKEN" ]; then
-    echo "Silakan masukkan data bot Anda:"
-    read -rp "1. Masukkan DISCORD_TOKEN: " DISCORD_TOKEN
+# Ambil token dari argumen jika ada
+if [ -n "$1" ]; then
+    DISCORD_TOKEN="$1"
 fi
 
+# Input konfigurasi dengan membaca langsung dari tty (keyboard)
+while [ -z "$DISCORD_TOKEN" ]; do
+    echo "Silakan masukkan Token bot Discord Anda:"
+    if [ -e /dev/tty ]; then
+        read -rp "1. Masukkan DISCORD_TOKEN: " DISCORD_TOKEN < /dev/tty
+    else
+        read -rp "1. Masukkan DISCORD_TOKEN: " DISCORD_TOKEN
+    fi
+
+    if [ -z "$DISCORD_TOKEN" ]; then
+        echo "[PERINGATAN] DISCORD_TOKEN tidak boleh kosong!"
+    fi
+done
+
 if [ -z "$CLIENT_ID" ]; then
-    read -rp "2. Masukkan CLIENT_ID [1551859313495253064]: " input_client_id
+    if [ -e /dev/tty ]; then
+        read -rp "2. Masukkan CLIENT_ID [1551859313495253064]: " input_client_id < /dev/tty
+    else
+        read -rp "2. Masukkan CLIENT_ID [1551859313495253064]: " input_client_id
+    fi
     CLIENT_ID=${input_client_id:-1551859313495253064}
 fi
 
 if [ -z "$STATUS_CHANNEL_ID" ]; then
-    read -rp "3. Masukkan STATUS_CHANNEL_ID [1551864566475128894]: " input_channel_id
+    if [ -e /dev/tty ]; then
+        read -rp "3. Masukkan STATUS_CHANNEL_ID [1551864566475128894]: " input_channel_id < /dev/tty
+    else
+        read -rp "3. Masukkan STATUS_CHANNEL_ID [1551864566475128894]: " input_channel_id
+    fi
     STATUS_CHANNEL_ID=${input_channel_id:-1551864566475128894}
 fi
 
@@ -78,3 +99,5 @@ echo "  SELAMAT! BOT MINECRAFT SUDAH AKTIF 24 JAM DI VPS!    "
 echo "========================================================"
 echo ""
 pm2 status
+echo ""
+echo "Untuk melihat log langsung bot, ketik: pm2 logs minecraft-bot"
