@@ -272,6 +272,22 @@ async function checkServerStatus(host, port = 19132, type = 'bedrock') {
         return srvStatResult;
       }
     } catch (srvErr) {}
+
+    // 2c. Cek Java/Geyser jika type Bedrock tidak merespon (banyak server Aternos menggunakan Paper/Geyser)
+    if (isBedrock) {
+      try {
+        const javaResult = await pingViaApi(host, port, 'java', 3000);
+        if (javaResult && javaResult.online) {
+          return javaResult;
+        }
+      } catch {}
+      try {
+        const javaSrv = await pingViaMcsrvstat(host, port, 'java', 3000);
+        if (javaSrv && javaSrv.online) {
+          return javaSrv;
+        }
+      } catch {}
+    }
   }
 
   return {
