@@ -1,9 +1,9 @@
 {
   "mcserver": {
-    "ip": "nindaminecraft.aternos.me",
+    "ip": "sasy199.aternos.me",
     "port": 19132,
     "type": "bedrock",
-    "name": "NINDA SMP",
+    "name": "sasy199",
     "icon": "https://i.imgur.com/6Msem8Q.png",
     "footerText": "Minecraft Bedrock Server Monitor • Aternos Safe Ping"
   },
