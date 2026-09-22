@@ -25,12 +25,22 @@ async function isServerRunning() {
     return { available: false, running: false, message: 'Kontrol systemd hanya tersedia di VPS Linux' };
   }
 
-  const res = await runShell('sudo systemctl is-active minecraft-bedrock');
-  const running = res.stdout === 'active';
+  // 1. Cek via systemctl tanpa sudo (tidak memerlukan password)
+  const sysRes = await runShell('systemctl is-active minecraft-bedrock');
+  let running = sysRes.stdout.toLowerCase().trim() === 'active';
+
+  // 2. Fallback cek apakah proses binary bedrock_server sedang jalan di background
+  if (!running) {
+    const procRes = await runShell('pgrep -f bedrock_server');
+    if (procRes.stdout && procRes.stdout.trim().length > 0) {
+      running = true;
+    }
+  }
+
   return {
     available: true,
     running,
-    statusText: res.stdout
+    statusText: running ? 'active' : sysRes.stdout
   };
 }
 
