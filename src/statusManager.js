@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { ActivityType } = require('discord.js');
+const { ActivityType, EmbedBuilder } = require('discord.js');
 const { checkServerStatus } = require('./pinger');
 const { createStatusEmbed, createStatusButtons } = require('./embeds');
 
@@ -11,6 +11,7 @@ class StatusManager {
     this.client = client;
     this.config = config;
     this.latestStatus = null;
+    this.previousOnlineState = null;
     this.statusTimer = null;
     this.channelNameTimer = null;
     this.lastChannelName = null;
@@ -56,6 +57,7 @@ class StatusManager {
       this.config.mcserver.type
     );
     this.latestStatus = status;
+    this.previousOnlineState = status.online;
 
     const embed = createStatusEmbed(status, this.config);
     const buttons = createStatusButtons(this.config);
@@ -73,6 +75,59 @@ class StatusManager {
   }
 
   /**
+   * Mengirim notifikasi chat ketika server baru saja Online atau Offline
+   */
+  async sendNotification(alertType, status) {
+    const alertConfig = this.config.notifications?.[alertType];
+    if (!alertConfig || !alertConfig.enabled) return;
+
+    const channelId = alertConfig.channelId || process.env.STATUS_CHANNEL_ID || this.state.statusChannelId;
+    if (!channelId) return;
+
+    const channel = await this.client.channels.fetch(channelId).catch(() => null);
+    if (!channel || !channel.isTextBased()) return;
+
+    const mc = this.config.mcserver;
+    const isOnline = alertType === 'onlineAlert';
+
+    const embed = new EmbedBuilder()
+      .setColor(isOnline ? (this.config.display?.colorOnline || '#2ECC71') : (this.config.display?.colorOffline || '#E74C3C'))
+      .setTitle(alertConfig.title || (isOnline ? '🎉 Server Minecraft Online!' : '🔴 Server Minecraft Offline'))
+      .setDescription(
+        (alertConfig.message || '')
+          .replace('{name}', mc.name)
+          .replace('{ip}', mc.ip)
+          .replace('{port}', mc.port)
+      )
+      .addFields(
+        { name: '📡 Alamat Server', value: `\`${mc.ip}\``, inline: true },
+        { name: '🔌 Port Bedrock', value: `\`${mc.port}\``, inline: true },
+        { name: '👥 Pemain', value: `\`${status.players?.online || 0} / ${status.players?.max || 20}\``, inline: true }
+      )
+      .setThumbnail(mc.icon || null)
+      .setTimestamp();
+
+    if (mc.footerText) {
+      embed.setFooter({ text: mc.footerText, iconURL: mc.icon || undefined });
+    }
+
+    const payload = {
+      embeds: [embed],
+      components: [createStatusButtons(this.config)]
+    };
+
+    if (alertConfig.mention && alertConfig.mention.trim() !== '') {
+      payload.content = alertConfig.mention.trim();
+    }
+
+    await channel.send(payload).catch((err) => {
+      console.warn(`[StatusManager] Gagal kirim notifikasi ${alertType}:`, err.message);
+    });
+
+    console.log(`[StatusManager] Berhasil mengirim notifikasi ${alertType} ke channel ${channel.name}!`);
+  }
+
+  /**
    * Memperbarui embed status message
    */
   async updateStatusEmbed() {
@@ -87,13 +142,24 @@ class StatusManager {
       );
       this.latestStatus = status;
 
-      // 1. Update Bot Presence
+      // 1. Deteksi perubahan status Online/Offline untuk notifikasi
+      if (this.previousOnlineState !== null) {
+        if (this.previousOnlineState === false && status.online === true) {
+          console.log('[StatusManager] Terdeteksi server berubah status: OFFLINE -> ONLINE! Mengirim notifikasi...');
+          await this.sendNotification('onlineAlert', status);
+        } else if (this.previousOnlineState === true && status.online === false) {
+          console.log('[StatusManager] Terdeteksi server berubah status: ONLINE -> OFFLINE!');
+          await this.sendNotification('offlineAlert', status);
+        }
+      }
+      this.previousOnlineState = status.online;
+
+      // 2. Update Bot Presence
       this.updatePresence(status);
 
-      // 2. Tentukan Channel ID
+      // 3. Tentukan Channel ID untuk Live Status Panel
       const channelId = process.env.STATUS_CHANNEL_ID || this.state.statusChannelId;
       if (!channelId) {
-        // Belum disetting, abaikan
         return;
       }
 

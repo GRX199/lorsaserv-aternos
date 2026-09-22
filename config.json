@@ -11,6 +11,22 @@
     "statusEmbedSeconds": 45,
     "channelNameMinutes": 5
   },
+  "notifications": {
+    "onlineAlert": {
+      "enabled": true,
+      "mention": "@everyone",
+      "channelId": "",
+      "title": "🎉 Server Minecraft Sudah ONLINE!",
+      "message": "Server **{name}** sudah aktif dan siap dimainkan! Ayo masuk sekarang!"
+    },
+    "offlineAlert": {
+      "enabled": false,
+      "mention": "",
+      "channelId": "",
+      "title": "🔴 Server Minecraft Telah Offline",
+      "message": "Server **{name}** saat ini telah mati."
+    }
+  },
   "display": {
     "colorOnline": "#2ECC71",
     "colorOffline": "#E74C3C",
