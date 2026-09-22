@@ -3,6 +3,7 @@ const path = require('node:path');
 const { ActivityType, EmbedBuilder } = require('discord.js');
 const { checkServerStatus } = require('./pinger');
 const { createStatusEmbed, createStatusButtons } = require('./embeds');
+const { isServerRunning } = require('./serverController');
 
 const STATE_FILE_PATH = path.join(__dirname, '..', 'data', 'state.json');
 
@@ -73,6 +74,40 @@ class StatusManager {
   }
 
   /**
+   * Mengambil status server dengan pengecekan ganda (UDP Ping + systemd fallback untuk VPS lokal)
+   */
+  async getStatusForServer(s) {
+    const pingHost = (s.isLocal && process.platform === 'linux') ? '127.0.0.1' : s.ip;
+    let status = await checkServerStatus(pingHost, s.port, s.type);
+
+    // Jika server lokal VPS dan UDP belum merespon, periksa langsung ke systemd service
+    if (s.isLocal && process.platform === 'linux' && !status.online) {
+      try {
+        const sysStatus = await isServerRunning();
+        if (sysStatus.running) {
+          status = {
+            online: true,
+            source: 'systemd-service',
+            latencyMs: 1,
+            host: s.ip,
+            port: s.port,
+            type: s.type,
+            edition: 'Bedrock',
+            motd: 'SASY199 • Minecraft Bedrock Server (Aktif)',
+            version: '1.26.51',
+            players: { online: 0, max: 10, list: [] },
+            gamemode: 'Survival'
+          };
+        }
+      } catch (err) {
+        console.warn('[StatusManager] Gagal cek systemd service:', err.message);
+      }
+    }
+
+    return status;
+  }
+
+  /**
    * Menyiapkan live status messages di channel tertentu (dipanggil oleh /setup-status)
    */
   async setupStatusMessage(channel) {
@@ -81,8 +116,7 @@ class StatusManager {
     this.state.serverMessages = this.state.serverMessages || {};
 
     for (const s of servers) {
-      const pingHost = (s.isLocal && process.platform === 'linux') ? '127.0.0.1' : s.ip;
-      const status = await checkServerStatus(pingHost, s.port, s.type);
+      const status = await this.getStatusForServer(s);
       this.serverStatuses[s.id] = status;
       this.previousOnlineStates[s.id] = status.online;
 
@@ -165,8 +199,7 @@ class StatusManager {
       this.state.serverMessages = this.state.serverMessages || {};
 
       for (const s of servers) {
-        const pingHost = (s.isLocal && process.platform === 'linux') ? '127.0.0.1' : s.ip;
-        const status = await checkServerStatus(pingHost, s.port, s.type);
+        const status = await this.getStatusForServer(s);
         this.serverStatuses[s.id] = status;
 
         // 1. Deteksi perubahan status Online/Offline untuk notifikasi

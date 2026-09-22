@@ -11,19 +11,19 @@ module.exports = {
     await interaction.deferReply();
 
     try {
-      const { config } = context;
-      const status = await checkServerStatus(
-        config.mcserver.pingHost || config.mcserver.ip,
-        config.mcserver.port,
-        config.mcserver.type
-      );
+      const { config, statusManager } = context;
+      const servers = statusManager ? statusManager.getServers() : (config.servers || [config.mcserver]);
+      const embeds = [];
 
-      const embed = createStatusEmbed(status, config);
-      const buttons = createStatusButtons(config, Boolean(status?.online));
+      for (const s of servers) {
+        const status = statusManager
+          ? await statusManager.getStatusForServer(s)
+          : await checkServerStatus(s.ip, s.port, s.type);
+        embeds.push(createStatusEmbed(status, s, config));
+      }
 
       await interaction.editReply({
-        embeds: [embed],
-        components: [buttons]
+        embeds: embeds.slice(0, 10)
       });
     } catch (err) {
       await interaction.editReply({
