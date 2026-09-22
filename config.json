@@ -4,8 +4,9 @@
     "port": 19132,
     "type": "bedrock",
     "name": "sasy199",
+    "autoPublicIp": true,
     "icon": "https://i.imgur.com/6Msem8Q.png",
-    "footerText": "Minecraft Bedrock Server Monitor • Aternos Safe Ping"
+    "footerText": "Minecraft Bedrock Server • Tencent Cloud VPS 24/7"
   },
   "intervals": {
     "statusEmbedSeconds": 45,

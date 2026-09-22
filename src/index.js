@@ -86,8 +86,42 @@ async function registerSlashCommands() {
 const port = process.env.PORT || 3000;
 startHealthServer(port, () => statusManager?.getLatestStatus(), config);
 
+async function initServerConfig(cfg) {
+  // Jika SERVER_IP ditentukan di .env, prioritaskan
+  if (process.env.SERVER_IP && process.env.SERVER_IP.trim()) {
+    cfg.mcserver.ip = process.env.SERVER_IP.trim();
+    console.log(`[Config] Menggunakan SERVER_IP dari .env: ${cfg.mcserver.ip}`);
+  } else if (cfg.mcserver.autoPublicIp !== false) {
+    // Coba ambil IP publik VPS secara otomatis
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch('https://api.ipify.org', { signal: controller.signal });
+      clearTimeout(timer);
+      if (res.ok) {
+        const publicIp = (await res.text()).trim();
+        if (publicIp && publicIp.length >= 7) {
+          cfg.mcserver.ip = publicIp;
+          console.log(`[Config] Otomatis mendeteksi IP Publik VPS: ${publicIp}`);
+        }
+      }
+    } catch (err) {
+      console.warn(`[Config] Gagal deteksi IP publik otomatis: ${err.message}`);
+    }
+  }
+
+  // Jika di Linux dan bedrock-server berjalan lokal di VPS, set pingHost ke 127.0.0.1
+  if (process.platform === 'linux') {
+    cfg.mcserver.pingHost = '127.0.0.1';
+    console.log('[Config] Berjalan di VPS Linux: memantau server Minecraft lokal (127.0.0.1:19132)');
+  }
+}
+
 // 6. Event Saat Bot Berhasil Login & Online
 client.once('ready', async () => {
+  // Inisialisasi IP server dan mode VPS lokal
+  await initServerConfig(config);
+
   console.log(`=========================================`);
   console.log(`🤖 Bot Discord Berhasil Login: ${client.user.tag}`);
   console.log(`🎮 Server Target: ${config.mcserver.name} (${config.mcserver.ip}:${config.mcserver.port})`);

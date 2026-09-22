@@ -52,7 +52,7 @@ class StatusManager {
    */
   async setupStatusMessage(channel) {
     const status = await checkServerStatus(
-      this.config.mcserver.ip,
+      this.config.mcserver.pingHost || this.config.mcserver.ip,
       this.config.mcserver.port,
       this.config.mcserver.type
     );
@@ -136,7 +136,7 @@ class StatusManager {
 
     try {
       const status = await checkServerStatus(
-        this.config.mcserver.ip,
+        this.config.mcserver.pingHost || this.config.mcserver.ip,
         this.config.mcserver.port,
         this.config.mcserver.type
       );
@@ -246,7 +246,7 @@ class StatusManager {
       if (!channel) return;
 
       const status = this.latestStatus || await checkServerStatus(
-        this.config.mcserver.ip,
+        this.config.mcserver.pingHost || this.config.mcserver.ip,
         this.config.mcserver.port,
         this.config.mcserver.type
       );

@@ -13,13 +13,13 @@ module.exports = {
     try {
       const { config } = context;
       const status = await checkServerStatus(
-        config.mcserver.ip,
+        config.mcserver.pingHost || config.mcserver.ip,
         config.mcserver.port,
         config.mcserver.type
       );
 
       const embed = createStatusEmbed(status, config);
-      const buttons = createStatusButtons(config);
+      const buttons = createStatusButtons(config, Boolean(status?.online));
 
       await interaction.editReply({
         embeds: [embed],
