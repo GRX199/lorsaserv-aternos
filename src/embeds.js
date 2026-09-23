@@ -51,7 +51,8 @@ function createStatusEmbed(status, serverConfig, globalConfig) {
       `👥 **Pemain Online**: \` ${playersOnline} / ${playersMax} \` orang`,
       `🌐 **Versi / Tipe**: \`${edition}\` (${version})`,
       `📡 **Alamat Host**: \`${serverConfig.ip}\``,
-      `🔌 **Port Bedrock**: \`${serverConfig.port}\``,
+      `📱 **Port Bedrock**: \`${serverConfig.port}\``,
+      ...(serverConfig.isLocal ? [`💻 **Port Java (PC)**: \`25565\``] : []),
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━`
     ];
 
@@ -79,7 +80,8 @@ function createStatusEmbed(status, serverConfig, globalConfig) {
       `📊 **Status**: \`🔴 OFFLINE\``,
       `👥 **Pemain**: \` 0 / ${status.players?.max || (serverConfig.isLocal ? 10 : 20)} \``,
       `📡 **Alamat Host**: \`${serverConfig.ip}\``,
-      `🔌 **Port Bedrock**: \`${serverConfig.port}\``,
+      `📱 **Port Bedrock**: \`${serverConfig.port}\``,
+      ...(serverConfig.isLocal ? [`💻 **Port Java (PC)**: \`25565\``] : []),
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
       serverConfig.isLocal
         ? `⚠️ *Server VPS saat ini sedang offline. Klik tombol **▶ Nyalakan Server** di bawah!*`

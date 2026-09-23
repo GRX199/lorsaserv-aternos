@@ -16,6 +16,7 @@ const {
 const { startHealthServer } = require('./server');
 const { StatusManager } = require('./statusManager');
 const { getConnectUrl } = require('./embeds');
+const { sendBroadcast } = require('./serverController');
 
 // 1. Baca Konfigurasi config.json
 const configPath = path.join(__dirname, '..', 'config.json');
@@ -334,15 +335,10 @@ client.on('messageCreate', async (message) => {
   const sender = (message.member?.displayName || message.author.username).replace(/["'\\]/g, '');
 
   try {
-    const { execSync } = require('node:child_process');
-    const rawtext = JSON.stringify({
-      rawtext: [
-        { text: `§b[Discord] §e${sender}§f: ${safeContent}` }
-      ]
-    });
-    const escaped = rawtext.replace(/"/g, '\\"');
-    execSync(`screen -S mc-bedrock -X stuff "tellraw @a ${escaped}\\n"`, { timeout: 3000 });
-    await message.react('🎮').catch(() => {});
+    const res = sendBroadcast(sender, safeContent);
+    if (res.success) {
+      await message.react('🎮').catch(() => {});
+    }
   } catch (err) {
     // Sesi screen mungkin belum aktif
   }

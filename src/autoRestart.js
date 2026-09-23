@@ -1,5 +1,4 @@
-const { execSync } = require('node:child_process');
-const { restartServer } = require('./serverController');
+const { restartServer, sendBroadcast } = require('./serverController');
 const { EmbedBuilder } = require('discord.js');
 
 class AutoRestart {
@@ -75,16 +74,8 @@ class AutoRestart {
   async sendWarning(minutesLeft) {
     console.log(`[AutoRestart] Mengirim peringatan restart otomatis (${minutesLeft} menit lagi)...`);
 
-    // 1. Kirim ke Minecraft Bedrock in-game
-    const rawtext = JSON.stringify({
-      rawtext: [
-        { text: `§e[Server] ⚠️ Peringatan: Pembersihan cache harian akan dimulai dalam §c${minutesLeft} menit§e!` }
-      ]
-    });
-
-    try {
-      execSync(`screen -S mc-bedrock -X stuff "tellraw @a ${rawtext.replace(/"/g, '\\"')}\n"`, { timeout: 3000 });
-    } catch {}
+    // 1. Kirim ke Minecraft in-game
+    sendBroadcast('Server', `⚠️ Peringatan: Pembersihan cache harian akan dimulai dalam ${minutesLeft} menit!`);
 
     // 2. Kirim ke channel Discord
     if (!this.statusManager?.client) return;
@@ -101,8 +92,8 @@ class AutoRestart {
       const embed = new EmbedBuilder()
         .setColor('#F1C40F')
         .setTitle('⚠️ Peringatan Restart Otomatis Harian')
-        .setDescription(`Server Minecraft Bedrock VPS akan di-restart otomatis dalam **${minutesLeft} menit** untuk pembersihan memori cache rutin.`)
-        .setFooter({ text: 'Restart hanya memakan waktu 3 detik' })
+        .setDescription(`Server Minecraft VPS akan di-restart otomatis dalam **${minutesLeft} menit** untuk pembersihan memori cache rutin.`)
+        .setFooter({ text: 'Restart hanya memakan waktu beberapa detik' })
         .setTimestamp();
 
       await channel.send({ embeds: [embed] }).catch(() => {});
@@ -117,12 +108,7 @@ class AutoRestart {
 
     try {
       // Broadcast terakhir sebelum mati
-      try {
-        const kickMsg = JSON.stringify({
-          rawtext: [{ text: '§c[Server] Server sedang restart otomatis (3 detik). Mohon tunggu...' }]
-        });
-        execSync(`screen -S mc-bedrock -X stuff "tellraw @a ${kickMsg.replace(/"/g, '\\"')}\n"`, { timeout: 3000 });
-      } catch {}
+      sendBroadcast('Server', '⚠️ Server sedang restart otomatis untuk pembersihan rutin. Mohon tunggu...');
 
       const res = await restartServer();
 

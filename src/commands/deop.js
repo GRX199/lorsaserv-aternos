@@ -1,10 +1,10 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const { execSync } = require('node:child_process');
+const { sendConsoleCommand } = require('../serverController');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('deop')
-    .setDescription('Cabut status Operator (Admin) seorang pemain di server Minecraft Bedrock')
+    .setDescription('Cabut status Operator (Admin) seorang pemain di server Minecraft')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(option =>
       option.setName('pemain')
@@ -28,7 +28,10 @@ module.exports = {
     }
 
     try {
-      execSync(`screen -S mc-bedrock -X stuff "deop \\"${playerName}\\"\\n"`, { timeout: 4000 });
+      const res = sendConsoleCommand(`deop "${playerName}"`);
+      if (!res.success) {
+        throw new Error(res.error || 'Sesi screen tidak ditemukan');
+      }
 
       const embed = new EmbedBuilder()
         .setColor('#E74C3C')
@@ -39,7 +42,7 @@ module.exports = {
           { name: '👤 Pemain', value: `\`${playerName}\``, inline: true },
           { name: '⚡ Status', value: '`Non-Operator (Pemain Biasa)`', inline: true }
         )
-        .setFooter({ text: 'Izin Operator Minecraft Bedrock' })
+        .setFooter({ text: 'Izin Operator Minecraft Server' })
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });

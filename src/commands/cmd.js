@@ -1,10 +1,10 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { execSync } = require('node:child_process');
+const { sendConsoleCommand } = require('../serverController');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('cmd')
-    .setDescription('Kirim perintah konsol langsung ke server Minecraft Bedrock (Khusus Admin)')
+    .setDescription('Kirim perintah konsol langsung ke server Minecraft (Khusus Admin)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(option =>
       option.setName('perintah')
@@ -16,7 +16,6 @@ module.exports = {
     await interaction.deferReply({ ephemeral: true });
 
     let cmd = interaction.options.getString('perintah').trim();
-    // Hilangkan tanda '/' di awal jika pemain mengetiknya
     if (cmd.startsWith('/')) {
       cmd = cmd.substring(1).trim();
     }
@@ -32,17 +31,14 @@ module.exports = {
         return;
       }
 
-      // Kirim perintah ke sesi screen mc-bedrock
-      const escaped = cmd.replace(/"/g, '\\"');
-      try {
-        execSync(`screen -S mc-bedrock -X stuff "${escaped}\n"`, { timeout: 4000 });
+      const result = sendConsoleCommand(cmd);
+      if (result.success) {
         await interaction.editReply({
-          content: `⚡ **Perintah Berhasil Dikirim ke Server:**\n\`\`\`prolog\n/${cmd}\n\`\`\`\n*💡 Cek channel log konsol untuk melihat respon output dari server.*`
+          content: `⚡ **Perintah Berhasil Dikirim ke Server (${result.screen}):**\n\`\`\`prolog\n/${cmd}\n\`\`\`\n*💡 Cek channel log konsol untuk melihat respon output dari server.*`
         });
-      } catch (screenErr) {
-        // Jika screen session mc-bedrock belum ada
+      } else {
         await interaction.editReply({
-          content: `⚠️ **Gagal mengirim ke konsol screen:** Sesi screen \`mc-bedrock\` tidak ditemukan.\nPastikan service \`minecraft-bedrock\` sudah dijalankan menggunakan screen.`
+          content: `⚠️ **Gagal mengirim ke konsol screen (${result.screen}):** ${result.error || 'Sesi screen tidak ditemukan'}.\nPastikan server Minecraft sudah aktif.`
         });
       }
     } catch (err) {

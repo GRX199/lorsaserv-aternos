@@ -1,10 +1,10 @@
 const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
-const { execSync } = require('node:child_process');
+const { sendConsoleCommand } = require('../serverController');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('op')
-    .setDescription('Jadikan pemain sebagai Operator (Admin) di server Minecraft Bedrock')
+    .setDescription('Jadikan pemain sebagai Operator (Admin) di server Minecraft')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(option =>
       option.setName('pemain')
@@ -28,7 +28,10 @@ module.exports = {
     }
 
     try {
-      execSync(`screen -S mc-bedrock -X stuff "op \\"${playerName}\\"\\n"`, { timeout: 4000 });
+      const res = sendConsoleCommand(`op "${playerName}"`);
+      if (!res.success) {
+        throw new Error(res.error || 'Sesi screen tidak ditemukan');
+      }
 
       const embed = new EmbedBuilder()
         .setColor('#F1C40F')
@@ -39,14 +42,14 @@ module.exports = {
           { name: '👤 Pemain', value: `\`${playerName}\``, inline: true },
           { name: '⚡ Status', value: '`Aktif Seketika (Tanpa Restart)`', inline: true }
         )
-        .setFooter({ text: 'Izin Operator Minecraft Bedrock' })
+        .setFooter({ text: 'Izin Operator Minecraft Server' })
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });
     } catch (err) {
       console.error('[Command op] Error:', err);
       await interaction.editReply({
-        content: `⚠️ Gagal memberikan status Operator. Pastikan server Bedrock aktif di sesi screen: ${err.message}`
+        content: `⚠️ Gagal memberikan status Operator. Pastikan server aktif di sesi screen: ${err.message}`
       });
     }
   }

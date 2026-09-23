@@ -55,8 +55,8 @@ class PlayerLogMonitor {
 
     const cmd = this.useSudo ? 'sudo' : 'journalctl';
     const args = this.useSudo
-      ? ['-n', 'journalctl', '-u', 'minecraft-bedrock', '-f', '-n', '0']
-      : ['-u', 'minecraft-bedrock', '-f', '-n', '0'];
+      ? ['-n', 'journalctl', '-u', 'minecraft-bedrock', '-u', 'minecraft-paper', '-f', '-n', '0']
+      : ['-u', 'minecraft-bedrock', '-u', 'minecraft-paper', '-f', '-n', '0'];
 
     console.log(`[PlayerLogMonitor] Menjalankan pemantau log: ${cmd} ${args.join(' ')}`);
 
@@ -143,13 +143,18 @@ class PlayerLogMonitor {
     // 1. Teruskan baris log ke buffer streaming Discord channel
     this.forwardLogToChannel(line);
 
-    // 1.5. Deteksi In-Game Player Chat (dari Script API Behavior Pack)
-    // Contoh format: [Scripting] [CHAT] <Steve> Halo semuanya!
-    const chatMatch = line.match(/\[CHAT\]\s*<([^>]+)>\s*(.*)/i);
+    // 1.5. Deteksi In-Game Player Chat (Bedrock Behavior Pack atau PaperMC)
+    // Format Bedrock BDS: [Scripting] [CHAT] <Steve> Halo semuanya!
+    // Format PaperMC: [12:34:56 INFO]: <Steve> Halo semuanya!
+    let chatMatch = line.match(/\[CHAT\]\s*<([^>]+)>\s*(.*)/i);
+    if (!chatMatch) {
+      chatMatch = line.match(/(?:INFO\]:|\/INFO\]:)\s*<([a-zA-Z0-9_.* -]+)>\s+(.+)/);
+    }
     if (chatMatch) {
       const sender = chatMatch[1].trim();
       const text = chatMatch[2].trim();
-      if (sender && text) {
+      // Jangan forward jika pesan dari bot / broadcast Discord untuk mencegah loop echo
+      if (sender && text && !text.startsWith('[Discord]')) {
         console.log(`[PlayerLogMonitor] 💬 In-Game Chat Terdeteksi: <${sender}> ${text}`);
         this.forwardInGameChatToDiscord(sender, text);
         return;
@@ -157,13 +162,17 @@ class PlayerLogMonitor {
     }
 
     // 2. Deteksi Player Connected / Join
-    // Contoh format log: [2026-09-24 00:20:15:123 INFO] Player connected: Steve, xuid: 2535467890123456
-    const joinMatch = line.match(/Player connected:\s*([^,\n\r]+)/i);
+    // Contoh BDS: Player connected: Steve, xuid: ...
+    // Contoh PaperMC: Steve joined the game
+    let joinMatch = line.match(/Player connected:\s*([^,\n\r]+)/i);
+    if (!joinMatch) {
+      joinMatch = line.match(/(?:INFO\]:|\/INFO\]:)\s*([a-zA-Z0-9_.* -]+?)\s+joined the game/i);
+    }
     if (joinMatch) {
       let playerName = joinMatch[1].trim();
       playerName = playerName.replace(/^["']|["']$/g, '').trim();
 
-      if (playerName) {
+      if (playerName && !playerName.includes(' ')) {
         console.log(`[PlayerLogMonitor] 🟢 Player Join Terdeteksi: ${playerName}`);
         this.onlinePlayers.add(playerName);
         this.notifyPlayerChange('join', playerName);
@@ -172,13 +181,17 @@ class PlayerLogMonitor {
     }
 
     // 3. Deteksi Player Disconnected / Leave
-    // Contoh format log: [2026-09-24 00:25:10:456 INFO] Player disconnected: Steve, xuid: 2535467890123456
-    const leaveMatch = line.match(/Player disconnected:\s*([^,\n\r]+)/i);
+    // Contoh BDS: Player disconnected: Steve, xuid: ...
+    // Contoh PaperMC: Steve left the game ATAU Steve lost connection: Disconnected
+    let leaveMatch = line.match(/Player disconnected:\s*([^,\n\r]+)/i);
+    if (!leaveMatch) {
+      leaveMatch = line.match(/(?:INFO\]:|\/INFO\]:)\s*([a-zA-Z0-9_.* -]+?)\s+(?:left the game|lost connection:)/i);
+    }
     if (leaveMatch) {
       let playerName = leaveMatch[1].trim();
       playerName = playerName.replace(/^["']|["']$/g, '').trim();
 
-      if (playerName) {
+      if (playerName && !playerName.includes(' ')) {
         console.log(`[PlayerLogMonitor] 🔴 Player Leave Terdeteksi: ${playerName}`);
         this.onlinePlayers.delete(playerName);
         this.notifyPlayerChange('leave', playerName);
@@ -187,7 +200,7 @@ class PlayerLogMonitor {
     }
 
     // 4. Reset jika server berhenti / dimatikan
-    if (line.includes('Server stop') || line.includes('Quit command received') || line.includes('Stopping server')) {
+    if (line.includes('Server stop') || line.includes('Quit command received') || line.includes('Stopping server') || line.includes('Closing Server')) {
       console.log('[PlayerLogMonitor] Server stopped terdeteksi. Mereset daftar pemain.');
       this.onlinePlayers.clear();
       if (this.statusManager) {

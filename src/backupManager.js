@@ -11,6 +11,7 @@ class BackupManager {
 
     const homeDir = process.env.HOME || '/home/ubuntu';
     this.bedrockDir = process.env.BEDROCK_DIR || path.join(homeDir, 'bedrock-server');
+    this.paperDir = process.env.PAPER_DIR || path.join(homeDir, 'papermc-server');
     this.worldsDir = path.join(this.bedrockDir, 'worlds');
     this.backupsDir = process.env.BACKUPS_DIR || path.join(homeDir, 'minecraft-backups');
     this.maxRetention = this.config.backup?.maxRetention || 8; // Simpan 8 backup terakhir (2 hari @ interval 6 jam)
@@ -70,10 +71,19 @@ class BackupManager {
    * @param {boolean} manual - Apakah dipicu manual lewat slash command /backup
    */
   async createBackup(manual = false) {
-    if (!fs.existsSync(this.worldsDir)) {
+    // Deteksi apakah PaperMC atau Bedrock yang aktif memiliki data world
+    let baseDir = this.bedrockDir;
+    let targetDirs = 'worlds';
+
+    if (fs.existsSync(path.join(this.paperDir, 'world'))) {
+      baseDir = this.paperDir;
+      targetDirs = 'world';
+      if (fs.existsSync(path.join(this.paperDir, 'world_nether'))) targetDirs += ' world_nether';
+      if (fs.existsSync(path.join(this.paperDir, 'world_the_end'))) targetDirs += ' world_the_end';
+    } else if (!fs.existsSync(this.worldsDir)) {
       return {
         success: false,
-        message: `Direktori worlds tidak ditemukan di ${this.worldsDir}`
+        message: `Direktori worlds/world tidak ditemukan di ${this.bedrockDir} maupun ${this.paperDir}`
       };
     }
 
@@ -89,8 +99,7 @@ class BackupManager {
 
     try {
       // Jalankan tar kompresi gzip
-      // Di Linux: tar -czf targetFile -C bedrockDir worlds
-      const cmd = `tar -czf "${targetFile}" -C "${this.bedrockDir}" worlds`;
+      const cmd = `tar -czf "${targetFile}" -C "${baseDir}" ${targetDirs}`;
       execSync(cmd, { timeout: 60000 });
 
       const stats = fs.statSync(targetFile);

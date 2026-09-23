@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require('discord.js');
-const { execSync } = require('node:child_process');
+const { sendBroadcast } = require('../serverController');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -28,32 +28,15 @@ module.exports = {
         return;
       }
 
-      // Gunakan tellraw dengan warna cyan §b dan putih §f agar terlihat profesional
-      const tellrawJson = JSON.stringify({
-        rawtext: [
-          { text: `§b[Discord] §e${sender}§f: ${text}` }
-        ]
-      });
-
-      const escapedJson = tellrawJson.replace(/"/g, '\\"');
-
-      try {
-        execSync(`screen -S mc-bedrock -X stuff "tellraw @a ${escapedJson}\n"`, { timeout: 4000 });
+      const res = sendBroadcast(sender, text);
+      if (res.success) {
         await interaction.editReply({
-          content: `📢 **Siaran Terkirim ke In-Game Chat:**\n\`\`\`\n[Discord] ${sender}: ${text}\n\`\`\``
+          content: `📢 **Siaran Terkirim ke In-Game Chat (${res.screen}):**\n\`\`\`\n[Discord] ${sender}: ${text}\n\`\`\``
         });
-      } catch (screenErr) {
-        // Fallback coba say biasa
-        try {
-          execSync(`screen -S mc-bedrock -X stuff "say [Discord] ${sender}: ${text}\n"`, { timeout: 4000 });
-          await interaction.editReply({
-            content: `📢 **Siaran Terkirim:** \`[Discord] ${sender}: ${text}\``
-          });
-        } catch {
-          await interaction.editReply({
-            content: `⚠️ Sesi screen server \`mc-bedrock\` tidak aktif di VPS.`
-          });
-        }
+      } else {
+        await interaction.editReply({
+          content: `⚠️ Sesi screen server \`${res.screen || 'minecraft'}\` tidak aktif di VPS.`
+        });
       }
     } catch (err) {
       console.error('[Command say] Error:', err);
