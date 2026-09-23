@@ -5,7 +5,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('logs')
     .setDescription('Tampilkan baris log terbaru server Minecraft Bedrock')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addIntegerOption(option =>
       option.setName('jumlah')
         .setDescription('Jumlah baris log yang ingin dilihat (default: 20, max: 40)')

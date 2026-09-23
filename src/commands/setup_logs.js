@@ -4,7 +4,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('setup-logs')
     .setDescription('Aktifkan live stream log konsol server Minecraft di channel ini')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addChannelOption(option =>
       option.setName('channel')
         .setDescription('Channel tempat log akan dikirimkan (default: channel saat ini)')

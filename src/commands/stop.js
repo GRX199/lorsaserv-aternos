@@ -5,7 +5,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('stop-server')
     .setDescription('Matikan server Minecraft Bedrock di VPS secara aman (save world)')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction, context) {
     await interaction.deferReply();

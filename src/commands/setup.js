@@ -4,7 +4,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('setup-status')
     .setDescription('Pasang Live Status Panel otomatis di channel ini')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction, context) {
     await interaction.deferReply({ ephemeral: true });

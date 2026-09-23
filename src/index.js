@@ -9,7 +9,8 @@ const {
   Routes,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  PermissionFlagsBits
 } = require('discord.js');
 
 const { startHealthServer } = require('./server');
@@ -157,6 +158,19 @@ client.on('interactionCreate', async (interaction) => {
   try {
     // A. Interaksi Slash Command
     if (interaction.isChatInputCommand()) {
+      // Pastikan hanya Administrator / Owner yang dapat menjalankan perintah bot apapun
+      const isOwner = interaction.guild?.ownerId === interaction.user.id;
+      const isAdmin = isOwner || interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
+        || interaction.member?.permissions?.has(PermissionFlagsBits.Administrator);
+
+      if (!isAdmin) {
+        await interaction.reply({
+          content: '❌ **Akses Ditolak**: Hanya **Admin (Administrator)** yang diizinkan menggunakan perintah bot!',
+          ephemeral: true
+        });
+        return;
+      }
+
       const command = client.commands.get(interaction.commandName);
       if (!command) return;
 
@@ -186,6 +200,18 @@ client.on('interactionCreate', async (interaction) => {
 
       // Tombol ▶ Nyalakan Server
       if (interaction.customId === 'btn_start_server') {
+        const isOwner = interaction.guild?.ownerId === interaction.user.id;
+        const isAdmin = isOwner || interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
+          || interaction.member?.permissions?.has(PermissionFlagsBits.Administrator);
+
+        if (!isAdmin) {
+          await interaction.reply({
+            content: '❌ **Akses Ditolak**: Hanya **Admin** yang memiliki izin untuk menyalakan server!',
+            ephemeral: true
+          });
+          return;
+        }
+
         await interaction.deferReply({ ephemeral: true });
         const { startServer } = require('./serverController');
         const res = await startServer();

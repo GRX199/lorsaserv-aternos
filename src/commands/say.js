@@ -5,7 +5,7 @@ module.exports = {
   data: new SlashCommandBuilder()
     .setName('say')
     .setDescription('Kirim pesan siaran pengumuman ke layar semua pemain di dalam game')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(option =>
       option.setName('pesan')
         .setDescription('Pesan yang ingin disiarkan ke in-game chat')
