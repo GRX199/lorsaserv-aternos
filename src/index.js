@@ -159,7 +159,7 @@ client.on('interactionCreate', async (interaction) => {
     // A. Interaksi Slash Command
     if (interaction.isChatInputCommand()) {
       // Perintah berbahaya yang dikunci khusus untuk Admin
-      const adminOnlyCommands = ['cmd', 'op', 'deop', 'stop-server', 'restart-server', 'setup-status', 'setup-logs'];
+      const adminOnlyCommands = ['cmd', 'op', 'deop', 'stop-server', 'restart-server', 'setup-status', 'setup-logs', 'setup-chat'];
 
       if (adminOnlyCommands.includes(interaction.commandName)) {
         const isOwner = interaction.guild?.ownerId === interaction.user.id;
@@ -312,7 +312,8 @@ client.on('interactionCreate', async (interaction) => {
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
-  const bridgeChannelId = config.chatBridgeChannelId
+  const bridgeChannelId = statusManager?.getChatBridgeChannelId()
+    || config.chatBridgeChannelId
     || config.notifications?.chatBridge?.channelId
     || process.env.CHAT_BRIDGE_CHANNEL_ID;
 

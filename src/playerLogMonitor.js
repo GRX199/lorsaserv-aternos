@@ -230,7 +230,8 @@ class PlayerLogMonitor {
   async forwardInGameChatToDiscord(sender, text) {
     if (!this.statusManager?.client) return;
 
-    const channelId = this.config.chatBridgeChannelId
+    const channelId = this.statusManager?.getChatBridgeChannelId()
+      || this.config.chatBridgeChannelId
       || this.config.notifications?.chatBridge?.channelId
       || process.env.CHAT_BRIDGE_CHANNEL_ID;
 

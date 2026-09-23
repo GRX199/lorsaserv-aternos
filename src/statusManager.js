@@ -99,6 +99,25 @@ class StatusManager {
   }
 
   /**
+   * Mengambil ID channel untuk 2-way chat bridge
+   */
+  getChatBridgeChannelId() {
+    return process.env.CHAT_BRIDGE_CHANNEL_ID
+      || this.state.chatBridgeChannelId
+      || this.config.chatBridgeChannelId
+      || this.config.notifications?.chatBridge?.channelId
+      || null;
+  }
+
+  /**
+   * Menyimpan ID channel untuk 2-way chat bridge
+   */
+  setChatBridgeChannelId(channelId) {
+    this.state.chatBridgeChannelId = channelId;
+    this.saveState();
+  }
+
+  /**
    * Mengambil status server dengan pengecekan ganda (UDP Ping + systemd fallback untuk VPS lokal)
    */
   async getStatusForServer(s) {
