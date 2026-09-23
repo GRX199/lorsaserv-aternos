@@ -158,17 +158,21 @@ client.on('interactionCreate', async (interaction) => {
   try {
     // A. Interaksi Slash Command
     if (interaction.isChatInputCommand()) {
-      // Pastikan hanya Administrator / Owner yang dapat menjalankan perintah bot apapun
-      const isOwner = interaction.guild?.ownerId === interaction.user.id;
-      const isAdmin = isOwner || interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
-        || interaction.member?.permissions?.has(PermissionFlagsBits.Administrator);
+      // Perintah berbahaya yang dikunci khusus untuk Admin
+      const adminOnlyCommands = ['cmd', 'op', 'deop', 'stop-server', 'restart-server', 'setup-status', 'setup-logs'];
 
-      if (!isAdmin) {
-        await interaction.reply({
-          content: '❌ **Akses Ditolak**: Hanya **Admin (Administrator)** yang diizinkan menggunakan perintah bot!',
-          ephemeral: true
-        });
-        return;
+      if (adminOnlyCommands.includes(interaction.commandName)) {
+        const isOwner = interaction.guild?.ownerId === interaction.user.id;
+        const isAdmin = isOwner || interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
+          || interaction.member?.permissions?.has(PermissionFlagsBits.Administrator);
+
+        if (!isAdmin) {
+          await interaction.reply({
+            content: '❌ **Akses Ditolak**: Perintah ini khusus untuk **Admin (Administrator)**!',
+            ephemeral: true
+          });
+          return;
+        }
       }
 
       const command = client.commands.get(interaction.commandName);
@@ -198,20 +202,8 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
 
-      // Tombol ▶ Nyalakan Server
+      // Tombol ▶ Nyalakan Server (Boleh untuk semua member agar bisa main saat offline)
       if (interaction.customId === 'btn_start_server') {
-        const isOwner = interaction.guild?.ownerId === interaction.user.id;
-        const isAdmin = isOwner || interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
-          || interaction.member?.permissions?.has(PermissionFlagsBits.Administrator);
-
-        if (!isAdmin) {
-          await interaction.reply({
-            content: '❌ **Akses Ditolak**: Hanya **Admin** yang memiliki izin untuk menyalakan server!',
-            ephemeral: true
-          });
-          return;
-        }
-
         await interaction.deferReply({ ephemeral: true });
         const { startServer } = require('./serverController');
         const res = await startServer();

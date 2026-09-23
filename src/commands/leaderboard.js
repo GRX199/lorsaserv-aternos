@@ -1,10 +1,9 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('leaderboard')
-    .setDescription('Tampilkan papan peringkat Top 10 pemain dengan jam bermain terlama')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('Tampilkan papan peringkat Top 10 pemain dengan jam bermain terlama'),
 
   async execute(interaction, context) {
     await interaction.deferReply();

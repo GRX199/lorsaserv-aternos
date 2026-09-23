@@ -1,12 +1,11 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const { checkServerStatus } = require('../pinger');
 const { createStatusEmbed, createStatusButtons } = require('../embeds');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('status')
-    .setDescription('Cek status terkini server Minecraft Bedrock')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('Cek status terkini server Minecraft Bedrock'),
 
   async execute(interaction, context) {
     await interaction.deferReply();

@@ -1,11 +1,10 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { getConnectUrl } = require('../embeds');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('ip')
-    .setDescription('Tampilkan IP dan Port server Minecraft')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('Tampilkan IP dan Port server Minecraft'),
 
   async execute(interaction, context) {
     const { config, statusManager } = context;

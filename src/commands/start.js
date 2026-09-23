@@ -1,11 +1,10 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const { startServer } = require('../serverController');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('start-server')
-    .setDescription('Nyalakan server Minecraft Bedrock di VPS')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('Nyalakan server Minecraft Bedrock di VPS'),
 
   async execute(interaction, context) {
     await interaction.deferReply();

@@ -1,10 +1,9 @@
-const { SlashCommandBuilder, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('playtime')
     .setDescription('Cek total waktu bermain (jam terbang) seorang pemain di server VPS')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(option =>
       option.setName('pemain')
         .setDescription('Nama / gamertag pemain di Minecraft (contoh: sasy199)')

@@ -1,11 +1,10 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const { execSync } = require('node:child_process');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('logs')
     .setDescription('Tampilkan baris log terbaru server Minecraft Bedrock')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addIntegerOption(option =>
       option.setName('jumlah')
         .setDescription('Jumlah baris log yang ingin dilihat (default: 20, max: 40)')

@@ -1,11 +1,10 @@
-const { SlashCommandBuilder, PermissionFlagsBits, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const fs = require('node:fs');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('backup')
-    .setDescription('Cadangkan (backup) seluruh dunia Minecraft Bedrock ke arsip .tar.gz')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('Cadangkan (backup) seluruh dunia Minecraft Bedrock ke arsip .tar.gz'),
 
   async execute(interaction, context) {
     await interaction.deferReply();

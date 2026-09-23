@@ -1,11 +1,10 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const { SystemMonitor } = require('../systemMonitor');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('vps')
-    .setDescription('Cek spesifikasi dan penggunaan resource VPS Tencent secara real-time')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    .setDescription('Cek spesifikasi dan penggunaan resource VPS Tencent secara real-time'),
 
   async execute(interaction) {
     await interaction.deferReply();

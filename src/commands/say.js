@@ -1,11 +1,10 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const { execSync } = require('node:child_process');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('say')
     .setDescription('Kirim pesan siaran pengumuman ke layar semua pemain di dalam game')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addStringOption(option =>
       option.setName('pesan')
         .setDescription('Pesan yang ingin disiarkan ke in-game chat')
