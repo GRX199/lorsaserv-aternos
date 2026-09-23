@@ -1,4 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { getConnectUrl } = require('../embeds');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -6,41 +7,43 @@ module.exports = {
     .setDescription('Tampilkan IP dan Port server Minecraft'),
 
   async execute(interaction, context) {
-    const { config } = context;
-    const mc = config.mcserver;
-    const deepLink = `minecraft://?addExternalServer=${encodeURIComponent(mc.name)}|${mc.ip}:${mc.port}`;
+    const { config, statusManager } = context;
+    const servers = statusManager ? statusManager.getServers() : (config.servers || [config.mcserver]);
+    const target = servers.find(s => s.id === 'vps' || s.isLocal) || servers[0];
+    const connectUrl = getConnectUrl(target, config);
 
     const embed = new EmbedBuilder()
       .setColor('#2ECC71')
-      .setTitle(`🎮 Cara Bergabung ke Server ${mc.name}`)
+      .setTitle(`🎮 Cara Bergabung ke Server ${target.name}`)
       .setDescription([
         `📱 **Masuk Otomatis (Android / iOS / Windows):**`,
-        `👉 **[KLIK DI SINI UNTUK BUKA MINECRAFT OTOMATIS](${deepLink})**`,
+        `👉 **[KLIK DI SINI UNTUK BUKA MINECRAFT OTOMATIS](${connectUrl})**`,
+        `*(Atau ketuk tombol hijau **Buka Game Minecraft** di bawah)*`,
         ``,
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         `📋 **Data Server Manual (Salin di bawah):**`,
         ``,
-        `📡 **Server Address / IP:** (Ketuk/tahan untuk salin)`,
-        `\`\`\`\n${mc.ip}\n\`\`\``,
-        `🔌 **Port:** (Ketuk/tahan untuk salin)`,
-        `\`\`\`\n${mc.port}\n\`\`\``,
+        `📡 **Server Address / IP:** *(Ketuk teks dalam kotak untuk salin)*`,
+        `\`\`\`\n${target.ip}\n\`\`\``,
+        `🔌 **Port Bedrock:** *(Ketuk teks dalam kotak untuk salin)*`,
+        `\`\`\`\n${target.port}\n\`\`\``,
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
         `*Buka Minecraft Bedrock → Play → Servers → Add Server lalu paste data di atas.*`
       ].join('\n'))
-      .setFooter({ text: mc.footerText || 'Minecraft Bedrock Server' })
+      .setFooter({ text: target.name || 'Minecraft Bedrock Server' })
       .setTimestamp();
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId('btn_copy_ip')
+        .setStyle(ButtonStyle.Link)
+        .setURL(connectUrl)
+        .setLabel('Buka Game Minecraft')
+        .setEmoji('🎮'),
+      new ButtonBuilder()
+        .setCustomId(`btn_copy_ip_${target.id || 'vps'}`)
         .setLabel('Salin IP & Port')
         .setEmoji('📋')
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder()
-        .setCustomId('btn_connect_android')
-        .setLabel('Connect (Android)')
-        .setEmoji('🎮')
-        .setStyle(ButtonStyle.Success)
+        .setStyle(ButtonStyle.Primary)
     );
 
     await interaction.reply({

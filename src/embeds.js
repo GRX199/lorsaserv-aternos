@@ -1,6 +1,23 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 /**
+ * Mendapatkan tautan HTTP redirect koneksi server yang valid dan bisa diklik di Discord
+ * @param {object} serverConfig - Konfigurasi server { id, name, ip, port }
+ * @param {object} globalConfig - Konfigurasi global bot
+ */
+function getConnectUrl(serverConfig, globalConfig) {
+  const host = globalConfig?.publicUrl
+    || process.env.PUBLIC_URL
+    || (globalConfig?.publicIp ? `http://${globalConfig.publicIp}:${process.env.PORT || 3000}` : null)
+    || (serverConfig?.ip && serverConfig.ip !== 'auto' ? `http://${serverConfig.ip}:${process.env.PORT || 3000}` : null)
+    || `http://129.226.95.58:${process.env.PORT || 3000}`;
+
+  const cleanHost = host.replace(/\/+$/, '');
+  const sId = serverConfig?.id || 'main';
+  return `${cleanHost}/connect?id=${encodeURIComponent(sId)}`;
+}
+
+/**
  * Membuat Embed status panel yang rapi dan menarik untuk server tertentu
  * @param {object} status - Data status dari checkServerStatus()
  * @param {object} serverConfig - Konfigurasi spesifik server { id, name, ip, port, type, isLocal, icon }
@@ -26,6 +43,7 @@ function createStatusEmbed(status, serverConfig, globalConfig) {
     const playersMax = status.players?.max ?? (serverConfig.isLocal ? 10 : 20);
     const edition = status.edition || (serverConfig.type === 'java' ? 'Java Edition' : 'Bedrock Edition');
     const version = status.version || 'Bedrock';
+    const connectUrl = getConnectUrl(serverConfig, globalConfig);
 
     let description = [
       `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
@@ -49,6 +67,7 @@ function createStatusEmbed(status, serverConfig, globalConfig) {
       description.push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     }
 
+    description.push(`🎮 **Masuk Otomatis**: [Klik Buka Minecraft Bedrock](${connectUrl})`);
     description.push(`📱 Klik tombol di bawah untuk menyalin IP atau masuk langsung!`);
     description.push(`━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     description.push(`🔄 Diperbarui: <t:${nowUnix}:R>`);
@@ -83,19 +102,22 @@ function createStatusEmbed(status, serverConfig, globalConfig) {
  * Membuat Action Row berisi tombol interaktif (Connect Android, Nyalakan Server, Refresh, Salin IP)
  * @param {object} serverConfig - Konfigurasi server { id, name, ip, port, isLocal }
  * @param {boolean} isOnline - Status apakah server sedang online
+ * @param {object} globalConfig - Objek konfigurasi global config.json
  */
-function createStatusButtons(serverConfig, isOnline = true) {
+function createStatusButtons(serverConfig, isOnline = true, globalConfig = null) {
   const row = new ActionRowBuilder();
   const sId = serverConfig.id || 'main';
 
-  // Jika server online: berikan tombol Connect Android & Salin IP
+  // Jika server online: berikan tombol Connect Android (Link Button resmi) & Salin IP
   if (isOnline) {
+    const connectUrl = getConnectUrl(serverConfig, globalConfig);
+
     row.addComponents(
       new ButtonBuilder()
-        .setCustomId(`btn_connect_android_${sId}`)
+        .setStyle(ButtonStyle.Link)
+        .setURL(connectUrl)
         .setLabel('Connect (Android)')
-        .setEmoji('🎮')
-        .setStyle(ButtonStyle.Success),
+        .setEmoji('🎮'),
       new ButtonBuilder()
         .setCustomId(`btn_copy_ip_${sId}`)
         .setLabel('Salin IP & Port')
@@ -148,5 +170,6 @@ function createStatusButtons(serverConfig, isOnline = true) {
 
 module.exports = {
   createStatusEmbed,
-  createStatusButtons
+  createStatusButtons,
+  getConnectUrl
 };

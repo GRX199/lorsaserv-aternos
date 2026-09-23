@@ -6,11 +6,15 @@ const {
   GatewayIntentBits,
   Collection,
   REST,
-  Routes
+  Routes,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle
 } = require('discord.js');
 
 const { startHealthServer } = require('./server');
 const { StatusManager } = require('./statusManager');
+const { getConnectUrl } = require('./embeds');
 
 // 1. Baca Konfigurasi config.json
 const configPath = path.join(__dirname, '..', 'config.json');
@@ -82,7 +86,7 @@ async function registerSlashCommands() {
   }
 }
 
-// 5. Jalankan Web Health Server (Sangat penting untuk Render agar tidak crash / sleep)
+// 5. Jalankan Web Health Server (Sangat penting untuk Render agar tidak crash / sleep & link connect)
 const port = process.env.PORT || 3000;
 startHealthServer(port, () => statusManager?.getLatestStatus(), config);
 
@@ -104,6 +108,10 @@ async function initServerConfig(cfg) {
       console.warn(`[Config] Gagal deteksi IP publik otomatis: ${err.message}`);
     }
   }
+
+  cfg.publicIp = publicIp || '129.226.95.58';
+  cfg.webPort = port;
+  cfg.publicUrl = process.env.PUBLIC_URL || `http://${cfg.publicIp}:${port}`;
 
   if (cfg.mcserver && publicIp) {
     cfg.mcserver.ip = publicIp;
@@ -190,19 +198,30 @@ client.on('interactionCreate', async (interaction) => {
         const sId = interaction.customId.replace('btn_copy_ip_', '').replace('btn_copy_ip', '');
         const servers = statusManager ? statusManager.getServers() : (config.servers || [config.mcserver]);
         const target = servers.find(s => s.id === sId) || servers[0];
-        const deepLink = `minecraft://?addExternalServer=${encodeURIComponent(target.name)}|${target.ip}:${target.port}`;
+        const connectUrl = getConnectUrl(target, config);
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setStyle(ButtonStyle.Link)
+            .setURL(connectUrl)
+            .setLabel('Buka Game Minecraft')
+            .setEmoji('🎮')
+        );
 
         await interaction.reply({
           content: [
-            `📋 **Data Server ${target.name}:**`,
+            `📋 **Data Koneksi Server ${target.name}:**`,
             ``,
-            `📡 **Alamat Server (Ketuk kotak untuk salin):**`,
+            `📡 **Alamat IP Server** *(tekan kotak untuk salin)*:`,
             `\`\`\`\n${target.ip}\n\`\`\``,
-            `🔌 **Port (Ketuk kotak untuk salin):**`,
+            `🔌 **Port Bedrock** *(tekan kotak untuk salin)*:`,
             `\`\`\`\n${target.port}\n\`\`\``,
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
             `📱 **Mau langsung masuk tanpa ketik?**`,
-            `👉 **[KLIK DI SINI UNTUK BUKA MINECRAFT OTOMATIS](${deepLink})**`
+            `👉 **[KLIK DI SINI UNTUK MASUK MINECRAFT](${connectUrl})**`,
+            `*(Atau klik tombol hijau **Buka Game Minecraft** di bawah)*`
           ].join('\n'),
+          components: [row],
           ephemeral: true
         });
         return;
@@ -213,20 +232,32 @@ client.on('interactionCreate', async (interaction) => {
         const sId = interaction.customId.replace('btn_connect_android_', '').replace('btn_connect_android', '');
         const servers = statusManager ? statusManager.getServers() : (config.servers || [config.mcserver]);
         const target = servers.find(s => s.id === sId) || servers[0];
-        const deepLink = `minecraft://?addExternalServer=${encodeURIComponent(target.name)}|${target.ip}:${target.port}`;
+        const connectUrl = getConnectUrl(target, config);
+
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setStyle(ButtonStyle.Link)
+            .setURL(connectUrl)
+            .setLabel('Buka Game Minecraft')
+            .setEmoji('🎮')
+        );
 
         await interaction.reply({
           content: [
-            `🎮 **Buka Game ${target.name} Otomatis:**`,
-            `Klik tautan di bawah ini untuk langsung membuka Minecraft & menambahkan server ke game Anda:`,
+            `🎮 **Buka Game Minecraft (${target.name}) Otomatis:**`,
+            `Klik tautan atau tombol di bawah untuk langsung membuka Minecraft & menambahkan server ke game:`,
             ``,
-            `👉 **[KLIK DI SINI UNTUK BUKA GAME MINECRAFT](${deepLink})**`,
+            `👉 **[KLIK DI SINI UNTUK BUKA GAME MINECRAFT](${connectUrl})**`,
+            `*(Atau klik tombol hijau **Buka Game Minecraft** di bawah)*`,
             ``,
             `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-            `📋 **Atau salin manual:**`,
+            `📋 **Atau Salin Manual:**`,
             `• Alamat IP: \`${target.ip}\``,
-            `• Port: \`${target.port}\``
+            `• Port: \`${target.port}\``,
+            ``,
+            `*💡 Jika game tidak otomatis terbuka, buka Minecraft → Play → Servers → Add Server dan masukkan data di atas.*`
           ].join('\n'),
+          components: [row],
           ephemeral: true
         });
         return;

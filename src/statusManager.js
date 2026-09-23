@@ -121,7 +121,7 @@ class StatusManager {
       this.previousOnlineStates[s.id] = status.online;
 
       const embed = createStatusEmbed(status, s, this.config);
-      const buttons = createStatusButtons(s, Boolean(status?.online));
+      const buttons = createStatusButtons(s, Boolean(status?.online), this.config);
 
       const message = await channel.send({
         embeds: [embed],
@@ -170,7 +170,7 @@ class StatusManager {
 
     const payload = {
       embeds: [embed],
-      components: [createStatusButtons(serverConfig, isOnline)]
+      components: [createStatusButtons(serverConfig, isOnline, this.config)]
     };
 
     if (alertConfig.mention && alertConfig.mention.trim() !== '') {
@@ -218,7 +218,7 @@ class StatusManager {
         // 2. Update atau kirim Embed Message di Discord channel
         if (channel && channel.isTextBased()) {
           const embed = createStatusEmbed(status, s, this.config);
-          const buttons = createStatusButtons(s, Boolean(status?.online));
+          const buttons = createStatusButtons(s, Boolean(status?.online), this.config);
 
           let message = null;
           const msgId = this.state.serverMessages[s.id];
