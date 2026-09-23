@@ -27,10 +27,8 @@ module.exports = {
         `\`\`\`\n${target.ip}\n\`\`\``,
         `📱 **Port Bedrock (HP / Android / iOS / Win10):**`,
         `\`\`\`\n${target.port || 19132}\n\`\`\``,
-        `💻 **Port Java Edition (PC / TLauncher / Pojav):**`,
-        `\`\`\`\n25565\n\`\`\``,
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
-        `*💡 Pemain Bedrock (HP) & Java (PC / TLauncher) bisa bermain bersama di server ini!*`
+        `*💡 Buka Minecraft Bedrock → Play → Servers → Add Server dengan data di atas.*`
       ].join('\n'))
       .setFooter({ text: target.name || 'Minecraft Bedrock Server' })
       .setTimestamp();
