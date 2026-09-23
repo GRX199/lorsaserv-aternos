@@ -377,26 +377,18 @@ class StatusManager {
 
     try {
       const servers = this.getServers();
-      const vps = servers.find(s => s.id === 'vps');
-      const aternos = servers.find(s => s.id === 'aternos');
-
+      const vps = servers.find(s => s.id === 'vps') || servers[0];
       const vpsStatus = vps ? this.serverStatuses[vps.id] : null;
-      const aternosStatus = aternos ? this.serverStatuses[aternos.id] : null;
 
       let presenceText = '';
       if (vpsStatus && vpsStatus.online) {
-        presenceText = `VPS: 🟢 ${vpsStatus.players?.online || 0} pemain`;
-        if (aternosStatus && aternosStatus.online) {
-          presenceText += ` | Aternos: 🟢 ${aternosStatus.players?.online || 0}`;
-        }
-      } else if (aternosStatus && aternosStatus.online) {
-        presenceText = `Aternos: 🟢 ${aternosStatus.players?.online || 0} pemain`;
+        presenceText = `🟢 ${vpsStatus.players?.online || 0} pemain online`;
       } else {
         presenceText = '🔴 Server Offline';
       }
 
       this.client.user.setPresence({
-        status: (vpsStatus?.online || aternosStatus?.online) ? 'online' : 'idle',
+        status: vpsStatus?.online ? 'online' : 'idle',
         activities: [{ name: presenceText, type: ActivityType.Custom }]
       });
     } catch (err) {

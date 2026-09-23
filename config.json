@@ -8,24 +8,15 @@
       "type": "bedrock",
       "isLocal": true,
       "icon": "https://i.imgur.com/6Msem8Q.png"
-    },
-    {
-      "id": "aternos",
-      "name": "SASY199 • ATERNOS",
-      "ip": "sasy199.aternos.me",
-      "port": 19132,
-      "type": "bedrock",
-      "isLocal": false,
-      "icon": "https://i.imgur.com/6Msem8Q.png"
     }
   ],
   "mcserver": {
-    "ip": "sasy199.aternos.me",
+    "ip": "auto",
     "port": 19132,
     "type": "bedrock",
-    "name": "sasy199",
+    "name": "SASY199 • VPS TENCENT (24/7)",
     "icon": "https://i.imgur.com/6Msem8Q.png",
-    "footerText": "Minecraft Bedrock Server Monitor • 24/7"
+    "footerText": "Minecraft Bedrock Dedicated Server • Tencent 24/7"
   },
   "intervals": {
     "statusEmbedSeconds": 45,
