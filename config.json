@@ -45,6 +45,16 @@
       "channelId": "",
       "title": "🔴 Server {name} Telah Offline",
       "message": "Server **{name}** saat ini telah mati."
+    },
+    "playerJoin": {
+      "enabled": true,
+      "mention": "",
+      "channelId": ""
+    },
+    "playerLeave": {
+      "enabled": true,
+      "mention": "",
+      "channelId": ""
     }
   },
   "display": {

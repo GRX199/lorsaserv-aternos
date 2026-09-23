@@ -104,7 +104,7 @@ EOF
 # Berikan izin sudo tanpa password untuk perintah systemctl minecraft-bedrock agar Bot bisa menyalakan/mematikan server
 SUDOERS_FILE="/etc/sudoers.d/minecraft-bedrock"
 sudo tee "$SUDOERS_FILE" > /dev/null <<EOF
-$CURRENT_USER ALL=(ALL) NOPASSWD: /bin/systemctl start minecraft-bedrock, /bin/systemctl stop minecraft-bedrock, /bin/systemctl restart minecraft-bedrock, /bin/systemctl is-active minecraft-bedrock, /bin/systemctl status minecraft-bedrock
+$CURRENT_USER ALL=(ALL) NOPASSWD: /bin/systemctl start minecraft-bedrock, /bin/systemctl stop minecraft-bedrock, /bin/systemctl restart minecraft-bedrock, /bin/systemctl is-active minecraft-bedrock, /bin/systemctl status minecraft-bedrock, /bin/journalctl, /usr/bin/journalctl
 EOF
 sudo chmod 440 "$SUDOERS_FILE"
 

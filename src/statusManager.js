@@ -102,6 +102,16 @@ class StatusManager {
       } catch (err) {
         console.warn('[StatusManager] Gagal cek systemd service:', err.message);
       }
+    // Jika server lokal VPS dan ada pemain yang terdeteksi via PlayerLogMonitor
+    if (s.isLocal && this.playerLogMonitor) {
+      const livePlayers = this.playerLogMonitor.getOnlinePlayers();
+      if (livePlayers.length > 0) {
+        status.players = status.players || { max: 10 };
+        status.players.list = livePlayers;
+        if (status.online) {
+          status.players.online = Math.max(status.players.online || 0, livePlayers.length);
+        }
+      }
     }
 
     return status;
@@ -182,6 +192,77 @@ class StatusManager {
     });
 
     console.log(`[StatusManager] Berhasil mengirim notifikasi ${alertType} untuk ${serverName}!`);
+  }
+
+  /**
+   * Mengirim notifikasi chat ketika ada pemain Masuk (Join) atau Keluar (Leave) server VPS
+   * @param {'join' | 'leave'} type - Tipe notifikasi ('join' atau 'leave')
+   * @param {string} playerName - Nama pemain
+   * @param {object} serverConfig - Objek konfigurasi server
+   * @param {number} currentCount - Jumlah pemain online saat ini
+   */
+  async sendPlayerNotification(type, playerName, serverConfig, currentCount = null) {
+    const notifyConfig = this.config.notifications || {};
+    const alertKey = type === 'join' ? 'playerJoin' : 'playerLeave';
+    const alertConfig = notifyConfig[alertKey];
+
+    // Jika notifikasi pemain dinonaktifkan secara eksplisit, abaikan
+    if (alertConfig && alertConfig.enabled === false) return;
+
+    const channelId = alertConfig?.channelId
+      || notifyConfig.playerAlertChannelId
+      || process.env.PLAYER_ALERT_CHANNEL_ID
+      || process.env.STATUS_CHANNEL_ID
+      || this.state.statusChannelId;
+
+    if (!channelId) return;
+
+    const channel = await this.client.channels.fetch(channelId).catch(() => null);
+    if (!channel || !channel.isTextBased()) return;
+
+    const isJoin = type === 'join';
+    const serverName = serverConfig?.name || 'Minecraft Server';
+    const maxPlayers = serverConfig?.isLocal ? 10 : 20;
+    const countStr = currentCount !== null ? `${currentCount} / ${maxPlayers}` : null;
+    const nowUnix = Math.floor(Date.now() / 1000);
+
+    const embed = new EmbedBuilder()
+      .setColor(isJoin ? '#2ECC71' : '#E74C3C')
+      .setAuthor({
+        name: isJoin ? '🟢 Player Bergabung' : '🔴 Player Keluar',
+        iconURL: `https://mc-heads.net/avatar/${encodeURIComponent(playerName)}/64`
+      })
+      .setTitle(isJoin ? `👋 ${playerName} masuk ke server!` : `🚪 ${playerName} keluar dari server.`)
+      .setDescription(
+        isJoin
+          ? `Selamat datang **${playerName}** di **${serverName}**!`
+          : `Sampai jumpa lagi **${playerName}**!`
+      )
+      .setThumbnail(`https://mc-heads.net/avatar/${encodeURIComponent(playerName)}/64`)
+      .setTimestamp();
+
+    if (countStr) {
+      embed.addFields(
+        { name: '👥 Pemain Online', value: `\`${countStr}\``, inline: true },
+        { name: '⏰ Waktu', value: `<t:${nowUnix}:T>`, inline: true }
+      );
+    }
+
+    embed.setFooter({
+      text: `${serverName} • Notifikasi Pemain`,
+      iconURL: serverConfig?.icon || undefined
+    });
+
+    const payload = { embeds: [embed] };
+    if (alertConfig?.mention && alertConfig.mention.trim() !== '') {
+      payload.content = alertConfig.mention.trim();
+    }
+
+    await channel.send(payload).catch((err) => {
+      console.warn(`[StatusManager] Gagal kirim notifikasi player ${type} (${playerName}):`, err.message);
+    });
+
+    console.log(`[StatusManager] Berhasil kirim notifikasi player ${type}: ${playerName}`);
   }
 
   /**
@@ -344,6 +425,17 @@ class StatusManager {
     console.log(`[StatusManager] Memulai loop update embed multi-server setiap ${embedSec} detik.`);
     console.log(`[StatusManager] Memulai loop channel name setiap ${channelMin} menit.`);
 
+    // Inisialisasi pemantau log pemain (PlayerLogMonitor) untuk VPS Linux
+    if (process.platform === 'linux') {
+      try {
+        const { PlayerLogMonitor } = require('./playerLogMonitor');
+        this.playerLogMonitor = new PlayerLogMonitor(this, this.config);
+        this.playerLogMonitor.start();
+      } catch (err) {
+        console.warn('[StatusManager] Gagal memulai PlayerLogMonitor:', err.message);
+      }
+    }
+
     this.updateStatusEmbed();
     this.updatePlayerCountChannel();
 
@@ -359,6 +451,10 @@ class StatusManager {
   stop() {
     if (this.statusTimer) clearInterval(this.statusTimer);
     if (this.channelNameTimer) clearInterval(this.channelNameTimer);
+    if (this.playerLogMonitor) {
+      this.playerLogMonitor.stop();
+      this.playerLogMonitor = null;
+    }
   }
 }
 
