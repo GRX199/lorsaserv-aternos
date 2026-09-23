@@ -102,6 +102,8 @@ class StatusManager {
       } catch (err) {
         console.warn('[StatusManager] Gagal cek systemd service:', err.message);
       }
+    }
+
     // Jika server lokal VPS dan ada pemain yang terdeteksi via PlayerLogMonitor
     if (s.isLocal && this.playerLogMonitor) {
       const livePlayers = this.playerLogMonitor.getOnlinePlayers();
