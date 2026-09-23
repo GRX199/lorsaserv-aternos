@@ -41,8 +41,11 @@ curl -sL "https://download.geysermc.org/v2/projects/geyser/versions/latest/build
 echo "Mengunduh Floodgate-Spigot (Login Bedrock tanpa akun Java)..."
 curl -sL "https://download.geysermc.org/v2/projects/floodgate/versions/latest/builds/latest/downloads/spigot" -o Floodgate-Spigot.jar
 
-echo "Mengunduh ViaVersion (Dukungan semua versi client Java)..."
+echo "Mengunduh ViaVersion (Dukungan versi client Java terbaru & update)..."
 curl -sL "https://github.com/ViaVersion/ViaVersion/releases/download/5.12.0/ViaVersion-5.12.0.jar" -o ViaVersion.jar
+
+echo "Mengunduh ViaBackwards (Dukungan versi client Java lama 1.9 hingga 1.21.3)..."
+curl -sL "https://github.com/ViaVersion/ViaBackwards/releases/download/5.12.0/ViaBackwards-5.12.0.jar" -o ViaBackwards.jar
 
 cd "$PAPER_DIR"
 
