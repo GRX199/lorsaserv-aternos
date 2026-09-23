@@ -143,6 +143,19 @@ class PlayerLogMonitor {
     // 1. Teruskan baris log ke buffer streaming Discord channel
     this.forwardLogToChannel(line);
 
+    // 1.5. Deteksi In-Game Player Chat (dari Script API Behavior Pack)
+    // Contoh format: [Scripting] [CHAT] <Steve> Halo semuanya!
+    const chatMatch = line.match(/\[CHAT\]\s*<([^>]+)>\s*(.*)/i);
+    if (chatMatch) {
+      const sender = chatMatch[1].trim();
+      const text = chatMatch[2].trim();
+      if (sender && text) {
+        console.log(`[PlayerLogMonitor] 💬 In-Game Chat Terdeteksi: <${sender}> ${text}`);
+        this.forwardInGameChatToDiscord(sender, text);
+        return;
+      }
+    }
+
     // 2. Deteksi Player Connected / Join
     // Contoh format log: [2026-09-24 00:20:15:123 INFO] Player connected: Steve, xuid: 2535467890123456
     const joinMatch = line.match(/Player connected:\s*([^,\n\r]+)/i);
@@ -208,6 +221,66 @@ class PlayerLogMonitor {
 
     // Perbarui embed status secara instan agar daftar pemain langsung ter-refresh
     await this.statusManager.updateStatusEmbed().catch(() => {});
+  }
+
+  /**
+   * Meneruskan pesan chat in-game Minecraft ke channel Discord (#chat-minecraft)
+   * Menggunakan Webhook (dengan avatar skin pemain) atau pesan bot
+   */
+  async forwardInGameChatToDiscord(sender, text) {
+    if (!this.statusManager?.client) return;
+
+    const channelId = this.config.chatBridgeChannelId
+      || this.config.notifications?.chatBridge?.channelId
+      || process.env.CHAT_BRIDGE_CHANNEL_ID;
+
+    let targetChannel = null;
+
+    if (channelId) {
+      targetChannel = await this.statusManager.client.channels.fetch(channelId).catch(() => null);
+    } else {
+      // Cari channel bernama 'chat-minecraft' atau 'minecraft-chat' di server Discord
+      for (const guild of this.statusManager.client.guilds.cache.values()) {
+        const found = guild.channels.cache.find(c =>
+          c.isTextBased() && (c.name === 'chat-minecraft' || c.name === 'minecraft-chat')
+        );
+        if (found) {
+          targetChannel = found;
+          break;
+        }
+      }
+    }
+
+    if (!targetChannel || !targetChannel.isTextBased()) return;
+
+    try {
+      // Coba gunakan Discord Webhook agar muncul nama & kepala skin pemain langsung
+      let webhook = null;
+      if (targetChannel.fetchWebhooks) {
+        const hooks = await targetChannel.fetchWebhooks().catch(() => null);
+        webhook = hooks?.find(h => h.name === 'MinecraftChatBridge');
+        if (!webhook && targetChannel.createWebhook) {
+          webhook = await targetChannel.createWebhook({
+            name: 'MinecraftChatBridge',
+            reason: 'Minecraft 2-Way Chat Bridge'
+          }).catch(() => null);
+        }
+      }
+
+      if (webhook) {
+        await webhook.send({
+          content: text,
+          username: `${sender} (Minecraft)`,
+          avatarURL: `https://mc-heads.net/avatar/${encodeURIComponent(sender)}/128`
+        }).catch(async () => {
+          await targetChannel.send(`💬 **[Minecraft] ${sender}**: ${text}`).catch(() => {});
+        });
+      } else {
+        await targetChannel.send(`💬 **[Minecraft] ${sender}**: ${text}`).catch(() => {});
+      }
+    } catch (err) {
+      console.warn('[PlayerLogMonitor] Gagal meneruskan chat in-game ke Discord:', err.message);
+    }
   }
 
   /**
