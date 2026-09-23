@@ -33,6 +33,15 @@ module.exports = {
         return;
       }
 
+      // Periksa izin bot di channel target
+      const botMember = await interaction.guild.members.fetchMe().catch(() => null);
+      if (botMember && !targetChannel.permissionsFor(botMember).has(['ViewChannel', 'SendMessages'])) {
+        await interaction.editReply({
+          content: `⚠️ **Bot Tidak Memiliki Izin di ${targetChannel}:**\nBot belum memiliki izin **View Channel** atau **Send Messages** di channel tersebut.\nSilakan buka **Settings Channel $\rightarrow$ Permissions**, tambahkan role bot dan beri izin View & Send Messages.`
+        });
+        return;
+      }
+
       statusManager.setLogChannelId(targetChannel.id);
 
       await targetChannel.send({
@@ -44,6 +53,10 @@ module.exports = {
           `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`
         ].join('\n')
       });
+
+      if (statusManager.playerLogMonitor) {
+        statusManager.playerLogMonitor.sendStartupLogMessage();
+      }
 
       await interaction.editReply({
         content: `✅ **Berhasil!** Channel ${targetChannel} telah disetel sebagai channel **Live Console Logs**.\nSemua log server sekarang akan dikirim ke sana secara real-time!`

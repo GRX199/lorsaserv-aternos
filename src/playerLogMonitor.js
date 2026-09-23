@@ -35,8 +35,17 @@ class PlayerLogMonitor {
       return;
     }
 
+    const logChannelId = this.statusManager?.getLogChannelId();
+    console.log(`[PlayerLogMonitor] Memulai pemantauan log journalctl. Target channel log: ${logChannelId || 'Belum diatur'}`);
+
     this.isStopping = false;
     this.spawnWatcher();
+
+    if (logChannelId) {
+      setTimeout(() => {
+        this.sendStartupLogMessage();
+      }, 3000);
+    }
   }
 
   spawnWatcher() {
@@ -309,6 +318,52 @@ class PlayerLogMonitor {
       }
     } catch (err) {
       console.warn('[PlayerLogMonitor] Error saat mengirim log:', err.message);
+    }
+  }
+
+  /**
+   * Mengirimkan status koneksi konsol & 5 baris log server terakhir saat bot baru aktif
+   */
+  async sendStartupLogMessage() {
+    const channelId = this.statusManager?.getLogChannelId();
+    if (!channelId) return;
+
+    try {
+      const channel = await this.statusManager.client.channels.fetch(channelId).catch(() => null);
+      if (!channel || !channel.isTextBased()) {
+        console.warn(`[PlayerLogMonitor] Channel log (${channelId}) tidak dapat diakses atau bukan text channel.`);
+        return;
+      }
+
+      // Ambil 5 baris log terakhir agar channel langsung menampilkan aktivitas server
+      let recentLogs = '';
+      try {
+        const { execSync } = require('node:child_process');
+        const raw = execSync('journalctl -u minecraft-bedrock -n 5 --no-pager', { encoding: 'utf8', timeout: 4000 });
+        const lines = raw.trim().split('\n').filter(l => l && !l.includes('how_to.html') && !l.includes('Telemetry'));
+        recentLogs = lines.map(l => {
+          const colonIdx = l.indexOf('bedrock_server[');
+          if (colonIdx !== -1) {
+            const after = l.indexOf(']: ', colonIdx);
+            if (after !== -1) l = l.substring(after + 3);
+          }
+          return l.replace(/\[\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2}:\d{2}):\d{3}\s+([A-Z]+)\]/, '[$1 $2]');
+        }).join('\n');
+      } catch {}
+
+      const msg = [
+        `\`\`\`ansi`,
+        `\u001b[0;32m[KONSOL AKTIF]\u001b[0m Terhubung ke konsol server Minecraft Bedrock VPS.`,
+        recentLogs ? `\u001b[0;34m--- Log Terbaru Saat Ini ---\u001b[0m\n${recentLogs}` : '',
+        `\`\`\``
+      ].filter(Boolean).join('\n');
+
+      await channel.send(msg).catch((err) => {
+        console.warn('[PlayerLogMonitor] Gagal kirim startup log message:', err.message);
+      });
+      console.log(`[PlayerLogMonitor] Berhasil mengirim konfirmasi ke channel log ${channelId}`);
+    } catch (err) {
+      console.warn('[PlayerLogMonitor] Error sendStartupLogMessage:', err.message);
     }
   }
 }

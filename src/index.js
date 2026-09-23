@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ override: true });
 const fs = require('node:fs');
 const path = require('node:path');
 const {

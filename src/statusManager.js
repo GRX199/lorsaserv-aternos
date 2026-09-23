@@ -79,6 +79,7 @@ class StatusManager {
   getLogChannelId() {
     return process.env.LOG_CHANNEL_ID
       || this.state.logChannelId
+      || this.config.logChannelId
       || this.config.notifications?.consoleLog?.channelId
       || null;
   }

@@ -31,6 +31,7 @@
     "statusEmbedSeconds": 45,
     "channelNameMinutes": 5
   },
+  "logChannelId": "",
   "notifications": {
     "onlineAlert": {
       "enabled": true,
