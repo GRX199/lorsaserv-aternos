@@ -24,13 +24,13 @@ else
 fi
 
 # 2. Install dependensi Linux yang dibutuhkan Bedrock Server
-echo "[2/6] Menginstall dependensi (libcurl4, unzip, jq, wget)..."
+echo "[2/6] Menginstall dependensi (libcurl4, unzip, jq, wget, screen)..."
 if command -v apt-get &> /dev/null; then
     sudo apt-get update -y
-    sudo apt-get install -y curl wget unzip jq libcurl4 libssl-dev
+    sudo apt-get install -y curl wget unzip jq libcurl4 libssl-dev screen
 elif command -v yum &> /dev/null; then
     sudo yum update -y
-    sudo yum install -y curl wget unzip jq libcurl openssl-devel
+    sudo yum install -y curl wget unzip jq libcurl openssl-devel screen
 fi
 
 # 3. Menyiapkan direktori server
@@ -91,7 +91,7 @@ Type=simple
 User=$CURRENT_USER
 WorkingDirectory=$BEDROCK_DIR
 Environment="LD_LIBRARY_PATH=.:$BEDROCK_DIR"
-ExecStart=$BEDROCK_DIR/bedrock_server
+ExecStart=/usr/bin/screen -DmS mc-bedrock $BEDROCK_DIR/bedrock_server
 Restart=on-failure
 RestartSec=5s
 KillSignal=SIGINT

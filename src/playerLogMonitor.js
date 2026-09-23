@@ -187,6 +187,15 @@ class PlayerLogMonitor {
     if (!this.statusManager) return;
 
     const servers = this.statusManager.getServers();
+    // Catat sesi pemain ke PlaytimeTracker
+    if (this.statusManager?.playtimeTracker) {
+      if (type === 'join') {
+        this.statusManager.playtimeTracker.recordJoin(playerName);
+      } else if (type === 'leave') {
+        this.statusManager.playtimeTracker.recordLeave(playerName);
+      }
+    }
+
     const vpsServer = servers.find(s => s.id === 'vps' || s.isLocal) || servers[0];
 
     // Kirim notifikasi embed ke channel Discord

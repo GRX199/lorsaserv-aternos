@@ -28,7 +28,11 @@ try {
 
 // 2. Inisialisasi Discord Client
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
 client.commands = new Collection();
@@ -262,6 +266,17 @@ client.on('interactionCreate', async (interaction) => {
         });
         return;
       }
+
+      // Tombol 🔄 Perbarui Metrik VPS
+      if (interaction.customId === 'btn_refresh_vps') {
+        const { SystemMonitor } = require('./systemMonitor');
+        const { embed, row } = SystemMonitor.createEmbed();
+        await interaction.update({
+          embeds: [embed],
+          components: [row]
+        }).catch(() => {});
+        return;
+      }
     }
   } catch (err) {
     console.error('[Interaction] Error saat menangani interaksi:', err);
@@ -272,6 +287,45 @@ client.on('interactionCreate', async (interaction) => {
         ephemeral: true
       }).catch(() => {});
     }
+  }
+});
+
+// 7.5. Event Listener Chat Bridge (Discord -> Minecraft Bedrock In-Game)
+client.on('messageCreate', async (message) => {
+  if (message.author.bot) return;
+
+  const bridgeChannelId = config.chatBridgeChannelId
+    || config.notifications?.chatBridge?.channelId
+    || process.env.CHAT_BRIDGE_CHANNEL_ID;
+
+  const isBridge = (bridgeChannelId && message.channelId === bridgeChannelId)
+    || message.channel?.name === 'chat-minecraft'
+    || message.channel?.name === 'minecraft-chat';
+
+  if (!isBridge) return;
+  if (process.platform !== 'linux') return;
+
+  let content = (message.cleanContent || message.content || '').trim();
+  if (!content && message.attachments.size > 0) {
+    content = '[Mengirim Media/Lampiran]';
+  }
+  if (!content) return;
+
+  const safeContent = content.replace(/[\r\n\t]+/g, ' ').substring(0, 100);
+  const sender = (message.member?.displayName || message.author.username).replace(/["'\\]/g, '');
+
+  try {
+    const { execSync } = require('node:child_process');
+    const rawtext = JSON.stringify({
+      rawtext: [
+        { text: `§b[Discord] §e${sender}§f: ${safeContent}` }
+      ]
+    });
+    const escaped = rawtext.replace(/"/g, '\\"');
+    execSync(`screen -S mc-bedrock -X stuff "tellraw @a ${escaped}\\n"`, { timeout: 3000 });
+    await message.react('🎮').catch(() => {});
+  } catch (err) {
+    // Sesi screen mungkin belum aktif
   }
 });
 
@@ -291,6 +345,17 @@ if (!token || token === 'MASUKKAN_TOKEN_BOT_DISCORD_ANDA_DI_SINI') {
   console.warn('Silakan salin file .env.example menjadi .env dan masukkan Token bot Anda.\n');
 } else {
   client.login(token).catch((err) => {
-    console.error('[Login Error] Gagal login ke Discord:', err.message);
+    if (err.code === 'DisallowedIntents') {
+      console.error('\n⚠️ [PERINGATAN INTENTS] DISALLOWED INTENTS TERDETEKSI:');
+      console.error('Fitur Chat Bridge membutuhkan "Message Content Intent" diaktifkan di Discord Developer Portal.');
+      console.error('Langkah mengaktifkannya (hanya butuh 10 detik):');
+      console.error('1. Buka: https://discord.com/developers/applications');
+      console.error('2. Pilih aplikasi Bot Anda -> Masuk ke menu "Bot" di bilah kiri.');
+      console.error('3. Gulir ke bagian "Privileged Gateway Intents".');
+      console.error('4. Centang / Aktifkan toggle "MESSAGE CONTENT INTENT" & klik "Save Changes".');
+      console.error('5. Jalankan: pm2 restart minecraft-bot\n');
+    } else {
+      console.error('[Login Error] Gagal login ke Discord:', err.message);
+    }
   });
 }

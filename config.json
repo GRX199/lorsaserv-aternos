@@ -32,6 +32,18 @@
     "channelNameMinutes": 5
   },
   "logChannelId": "",
+  "chatBridgeChannelId": "",
+  "backup": {
+    "enabled": true,
+    "intervalHours": 6,
+    "maxRetention": 8,
+    "channelId": ""
+  },
+  "autoRestart": {
+    "enabled": true,
+    "hour": 4,
+    "minute": 0
+  },
   "notifications": {
     "onlineAlert": {
       "enabled": true,

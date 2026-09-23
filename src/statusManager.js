@@ -4,6 +4,9 @@ const { ActivityType, EmbedBuilder } = require('discord.js');
 const { checkServerStatus } = require('./pinger');
 const { createStatusEmbed, createStatusButtons } = require('./embeds');
 const { isServerRunning } = require('./serverController');
+const { PlaytimeTracker } = require('./playtimeTracker');
+const { BackupManager } = require('./backupManager');
+const { AutoRestart } = require('./autoRestart');
 
 const STATE_FILE_PATH = path.join(__dirname, '..', 'data', 'state.json');
 
@@ -18,6 +21,9 @@ class StatusManager {
     this.lastChannelName = null;
     this.isUpdating = false;
     this.state = this.loadState();
+    this.playtimeTracker = new PlaytimeTracker();
+    this.backupManager = new BackupManager(this, this.config);
+    this.autoRestart = new AutoRestart(this, this.config);
   }
 
   getServers() {
@@ -455,6 +461,20 @@ class StatusManager {
       } catch (err) {
         console.warn('[StatusManager] Gagal memulai PlayerLogMonitor:', err.message);
       }
+
+      // Auto-Backup setiap 6 jam
+      try {
+        this.backupManager.start();
+      } catch (err) {
+        console.warn('[StatusManager] Gagal memulai BackupManager:', err.message);
+      }
+
+      // Auto-Restart harian jam 04:00 subuh
+      try {
+        this.autoRestart.start();
+      } catch (err) {
+        console.warn('[StatusManager] Gagal memulai AutoRestart:', err.message);
+      }
     }
 
     this.updateStatusEmbed();
@@ -475,6 +495,12 @@ class StatusManager {
     if (this.playerLogMonitor) {
       this.playerLogMonitor.stop();
       this.playerLogMonitor = null;
+    }
+    if (this.backupManager) {
+      this.backupManager.stop();
+    }
+    if (this.autoRestart) {
+      this.autoRestart.stop();
     }
   }
 }
