@@ -264,6 +264,102 @@ function startHealthServer(port = 3000, getStatusCallback, config) {
       return;
     }
 
+    // 3. Endpoint Download Bedrock World Archive (.zip)
+    if (pathname === '/download-bedrock-world' || pathname === '/bedrock_world.zip') {
+      const fs = require('node:fs');
+      const path = require('node:path');
+      const { execSync } = require('node:child_process');
+
+      const homeDir = process.env.HOME || '/home/ubuntu';
+      const worldsDir = path.join(homeDir, 'bedrock-server', 'worlds');
+      const publicZip = path.join(__dirname, '..', 'public', 'bedrock_world.zip');
+
+      if (!fs.existsSync(worldsDir)) {
+        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Direktori world Bedrock tidak ditemukan di server.');
+        return;
+      }
+
+      try {
+        let needsZip = !fs.existsSync(publicZip);
+        if (!needsZip) {
+          const stat = fs.statSync(publicZip);
+          if (Date.now() - stat.mtimeMs > 300000) {
+            needsZip = true;
+          }
+        }
+
+        if (needsZip) {
+          const publicDir = path.dirname(publicZip);
+          if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+          execSync(`python3 -c "import shutil; shutil.make_archive('${publicZip.replace('.zip', '')}', 'zip', '${worldsDir}')"`, { timeout: 60000 });
+        }
+
+        const stat = fs.statSync(publicZip);
+        res.writeHead(200, {
+          'Content-Type': 'application/zip',
+          'Content-Length': stat.size,
+          'Content-Disposition': 'attachment; filename="bedrock_world.zip"'
+        });
+
+        const readStream = fs.createReadStream(publicZip);
+        readStream.pipe(res);
+        return;
+      } catch (err) {
+        console.error('[Web Server] Gagal membuat/mengirim bedrock_world.zip:', err);
+        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end('Gagal membuat arsip world: ' + err.message);
+        return;
+      }
+    }
+
+    // 4. Endpoint Halaman Bantuan Konverter World (/converter)
+    if (pathname === '/converter') {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panduan Konversi World Bedrock ke Java</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f1012; color: #dbdee1; padding: 20px; line-height: 1.6; max-width: 650px; margin: auto; }
+    .card { background: #1e1f22; border: 1px solid #2b2d31; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+    h1, h2 { color: #fff; margin-top: 0; }
+    .btn { display: inline-block; background: #2ecc71; color: #000; font-weight: bold; text-decoration: none; padding: 12px 20px; border-radius: 8px; margin: 10px 0; }
+    .btn-chunker { background: #00b0f4; color: #fff; }
+    .code { background: #2b2d31; padding: 10px 14px; border-radius: 6px; font-family: monospace; color: #2ecc71; overflow-x: auto; }
+    .warn { background: rgba(241, 196, 15, 0.1); border-left: 4px solid #f1c40f; padding: 12px; margin: 15px 0; color: #f1c40f; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🗺️ Konversi World Bedrock ke Java</h1>
+    <div class="warn">
+      ⚠️ <b>Penting:</b> Sebelum mengonversi map, pastikan semua pemain telah memasukkan semua item, armor, dan senjata dari badan ke dalam <b>Chest (Peti)</b> di Bedrock!
+    </div>
+    <h2>Langkah 1: Unduh World Bedrock</h2>
+    <p>Klik tombol di bawah untuk mengunduh seluruh file map Bedrock lama Anda dari server:</p>
+    <a href="/download-bedrock-world" class="btn">📥 Unduh bedrock_world.zip</a>
+
+    <h2>Langkah 2: Konversi via Chunker</h2>
+    <p>Gunakan converter resmi Mojang (Chunker):</p>
+    <a href="https://chunker.app" target="_blank" class="btn btn-chunker">🌐 Buka Chunker.app</a>
+    <ol>
+      <li>Klik <b>Upload Archive</b> lalu pilih file <code>bedrock_world.zip</code> yang baru diunduh.</li>
+      <li>Pilih target output: <b>Java 1.21.4</b>.</li>
+      <li>Klik <b>Convert & Download</b> untuk mengunduh hasilnya (misal: <code>chunker_java_world.zip</code>).</li>
+    </ol>
+
+    <h2>Langkah 3: Terapkan ke Server</h2>
+    <p>Jalankan perintah ini di terminal VPS Anda:</p>
+    <div class="code">bash import_converted_world.sh &lt;nama_file_hasil_chunker.zip&gt;</div>
+  </div>
+</body>
+</html>`);
+      return;
+    }
+
     res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end('Not Found');
   });
