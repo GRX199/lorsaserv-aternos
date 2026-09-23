@@ -3,7 +3,7 @@ const readline = require('node:readline');
 
 /**
  * Memantau log Bedrock Dedicated Server secara real-time via journalctl
- * untuk mendeteksi event pemain bergabung (Join) dan keluar (Leave).
+ * untuk mendeteksi event pemain bergabung/keluar serta streaming log konsol ke Discord.
  */
 class PlayerLogMonitor {
   constructor(statusManager, config) {
@@ -15,6 +15,8 @@ class PlayerLogMonitor {
     this.retryTimer = null;
     this.isStopping = false;
     this.useSudo = false;
+    this.logBuffer = [];
+    this.flushTimer = null;
   }
 
   /**
@@ -114,6 +116,11 @@ class PlayerLogMonitor {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    this.logBuffer = [];
     this.cleanup();
   }
 
@@ -124,10 +131,11 @@ class PlayerLogMonitor {
   handleLogLine(line) {
     if (!line) return;
 
-    // 1. Deteksi Player Connected / Join
-    // Contoh format log resmi Mojang BDS:
-    // [2026-09-24 00:20:15:123 INFO] Player connected: Steve, xuid: 2535467890123456
-    // Sep 24 00:20:15 VM-0-9-ubuntu bedrock_server[1165087]: Player connected: sasy199, xuid: 
+    // 1. Teruskan baris log ke buffer streaming Discord channel
+    this.forwardLogToChannel(line);
+
+    // 2. Deteksi Player Connected / Join
+    // Contoh format log: [2026-09-24 00:20:15:123 INFO] Player connected: Steve, xuid: 2535467890123456
     const joinMatch = line.match(/Player connected:\s*([^,\n\r]+)/i);
     if (joinMatch) {
       let playerName = joinMatch[1].trim();
@@ -141,9 +149,8 @@ class PlayerLogMonitor {
       }
     }
 
-    // 2. Deteksi Player Disconnected / Leave
-    // Contoh format log:
-    // [2026-09-24 00:25:10:456 INFO] Player disconnected: Steve, xuid: 2535467890123456
+    // 3. Deteksi Player Disconnected / Leave
+    // Contoh format log: [2026-09-24 00:25:10:456 INFO] Player disconnected: Steve, xuid: 2535467890123456
     const leaveMatch = line.match(/Player disconnected:\s*([^,\n\r]+)/i);
     if (leaveMatch) {
       let playerName = leaveMatch[1].trim();
@@ -157,7 +164,7 @@ class PlayerLogMonitor {
       }
     }
 
-    // 3. Reset jika server berhenti / dimatikan
+    // 4. Reset jika server berhenti / dimatikan
     if (line.includes('Server stop') || line.includes('Quit command received') || line.includes('Stopping server')) {
       console.log('[PlayerLogMonitor] Server stopped terdeteksi. Mereset daftar pemain.');
       this.onlinePlayers.clear();
@@ -183,6 +190,126 @@ class PlayerLogMonitor {
 
     // Perbarui embed status secara instan agar daftar pemain langsung ter-refresh
     await this.statusManager.updateStatusEmbed().catch(() => {});
+  }
+
+  /**
+   * Memformat dan memasukkan baris log ke buffer streaming konsol Discord
+   * @param {string} rawLine - Baris mentah dari journalctl
+   */
+  forwardLogToChannel(rawLine) {
+    // Jika tidak ada channel log yang aktif, lewatkan agar hemat CPU
+    const logChannelId = this.statusManager?.getLogChannelId();
+    if (!logChannelId) return;
+
+    let cleanLine = rawLine.trim();
+    if (!cleanLine) return;
+
+    // Bersihkan prefix systemd journald (misal: "Sep 24 00:16:39 VM-0-9-ubuntu bedrock_server[1165087]: ")
+    const colonIdx = cleanLine.indexOf('bedrock_server[');
+    if (colonIdx !== -1) {
+      const afterBracket = cleanLine.indexOf(']: ', colonIdx);
+      if (afterBracket !== -1) {
+        cleanLine = cleanLine.substring(afterBracket + 3).trim();
+      }
+    }
+
+    // Sederhanakan timestamp panjang: [2026-09-24 00:16:39:485 INFO] -> [00:16:39 INFO]
+    cleanLine = cleanLine.replace(/\[\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2}:\d{2}):\d{3}\s+([A-Z]+)\]/, '[$1 $2]');
+
+    // Saring log spam berulang yang tidak berguna
+    if (
+      cleanLine === '' ||
+      cleanLine.startsWith('===') ||
+      cleanLine.includes('how_to.html') ||
+      cleanLine.includes('Server Telemetry is currently not enabled') ||
+      cleanLine.includes('Enabling this telemetry helps us') ||
+      cleanLine.includes('emit-server-telemetry=true')
+    ) {
+      return;
+    }
+
+    // Tambahkan styling warna ANSI untuk Discord
+    // INFO = Hijau (\u001b[0;32m), WARN = Kuning (\u001b[0;33m), ERROR = Merah (\u001b[0;31m)
+    let ansiLine = cleanLine;
+    if (cleanLine.includes('INFO]')) {
+      ansiLine = cleanLine.replace(/(\[[^\]]*INFO\])/, '\u001b[0;32m$1\u001b[0m');
+    } else if (cleanLine.includes('WARN]')) {
+      ansiLine = cleanLine.replace(/(\[[^\]]*WARN\])/, '\u001b[0;33m$1\u001b[0m');
+    } else if (cleanLine.includes('ERROR]')) {
+      ansiLine = cleanLine.replace(/(\[[^\]]*ERROR\])/, '\u001b[0;31m$1\u001b[0m');
+    }
+
+    this.logBuffer.push(ansiLine);
+    this.scheduleBufferFlush();
+  }
+
+  /**
+   * Menjadwalkan pengiriman log buffer secara berkala (batching anti rate-limit)
+   */
+  scheduleBufferFlush() {
+    // Jika ukuran buffer sudah mendekati batas pesan Discord (~1200 karakter), flush sekarang
+    const currentLen = this.logBuffer.reduce((acc, l) => acc + l.length + 1, 0);
+    if (currentLen >= 1200) {
+      this.flushLogBuffer();
+      return;
+    }
+
+    // Jika belum ada timer aktif, tunggu 2 detik untuk mengumpulkan baris log berikutnya
+    if (!this.flushTimer) {
+      this.flushTimer = setTimeout(() => {
+        this.flushTimer = null;
+        this.flushLogBuffer();
+      }, 2000);
+    }
+  }
+
+  /**
+   * Mengirim kumpulan baris log buffer ke Discord channel
+   */
+  async flushLogBuffer() {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+
+    if (this.logBuffer.length === 0) return;
+
+    const channelId = this.statusManager?.getLogChannelId();
+    if (!channelId) {
+      this.logBuffer = [];
+      return;
+    }
+
+    const linesToSend = this.logBuffer.splice(0, this.logBuffer.length);
+
+    try {
+      const channel = await this.statusManager.client.channels.fetch(channelId).catch(() => null);
+      if (!channel || !channel.isTextBased()) return;
+
+      // Kelompokkan dalam potongan aman maksimal ~1700 karakter per pesan
+      const chunks = [];
+      let currentChunk = '';
+
+      for (const line of linesToSend) {
+        if ((currentChunk.length + line.length + 1) > 1700) {
+          chunks.push(currentChunk);
+          currentChunk = line;
+        } else {
+          currentChunk = currentChunk ? (currentChunk + '\n' + line) : line;
+        }
+      }
+      if (currentChunk) chunks.push(currentChunk);
+
+      for (const chunk of chunks) {
+        await channel.send({
+          content: `\`\`\`ansi\n${chunk}\n\`\`\``
+        }).catch((err) => {
+          console.warn('[PlayerLogMonitor] Gagal kirim log ke channel Discord:', err.message);
+        });
+      }
+    } catch (err) {
+      console.warn('[PlayerLogMonitor] Error saat mengirim log:', err.message);
+    }
   }
 }
 

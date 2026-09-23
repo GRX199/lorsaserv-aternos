@@ -74,6 +74,24 @@ class StatusManager {
   }
 
   /**
+   * Mengambil ID channel untuk live log konsol
+   */
+  getLogChannelId() {
+    return process.env.LOG_CHANNEL_ID
+      || this.state.logChannelId
+      || this.config.notifications?.consoleLog?.channelId
+      || null;
+  }
+
+  /**
+   * Menyimpan ID channel untuk live log konsol
+   */
+  setLogChannelId(channelId) {
+    this.state.logChannelId = channelId;
+    this.saveState();
+  }
+
+  /**
    * Mengambil status server dengan pengecekan ganda (UDP Ping + systemd fallback untuk VPS lokal)
    */
   async getStatusForServer(s) {
