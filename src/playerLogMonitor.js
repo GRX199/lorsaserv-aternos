@@ -74,11 +74,11 @@ class PlayerLogMonitor {
 
       this.process.stderr.on('data', (data) => {
         const str = data.toString();
-        if (str.includes('Permission denied') && !this.useSudo) {
+        if ((str.includes('Permission denied') || str.includes('Hint:') || str.includes('systemd-journal')) && !this.useSudo) {
           console.warn('[PlayerLogMonitor] Memerlukan izin sudo untuk journalctl. Berpindah ke mode sudo...');
           this.useSudo = true;
           this.scheduleRestart(1000);
-        } else if (!str.includes('No entries') && !str.includes('-- Logs begin')) {
+        } else if (!str.includes('No entries') && !str.includes('-- Logs begin') && !str.includes('Hint:')) {
           console.warn('[PlayerLogMonitor] log error:', str.trim());
         }
       });

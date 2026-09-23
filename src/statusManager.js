@@ -259,12 +259,36 @@ class StatusManager {
       || notifyConfig.playerAlertChannelId
       || process.env.PLAYER_ALERT_CHANNEL_ID
       || process.env.STATUS_CHANNEL_ID
-      || this.state.statusChannelId;
+      || this.state.statusChannelId
+      || this.getChatBridgeChannelId()
+      || this.getLogChannelId();
 
-    if (!channelId) return;
+    let channel = null;
+    if (channelId) {
+      channel = await this.client.channels.fetch(channelId).catch(() => null);
+    }
 
-    const channel = await this.client.channels.fetch(channelId).catch(() => null);
-    if (!channel || !channel.isTextBased()) return;
+    if (!channel) {
+      for (const guild of this.client.guilds.cache.values()) {
+        const found = guild.channels.cache.find(c =>
+          c.isTextBased() && (
+            c.name === 'chat-minecraft' ||
+            c.name === 'minecraft-chat' ||
+            c.name === 'log-server' ||
+            c.name === 'status-server'
+          )
+        );
+        if (found) {
+          channel = found;
+          break;
+        }
+      }
+    }
+
+    if (!channel || !channel.isTextBased()) {
+      console.warn(`[StatusManager] Notifikasi player ${type} (${playerName}) tidak dapat dikirim: Channel notifikasi belum diatur. Jalankan /setup-chat atau /setup-status`);
+      return;
+    }
 
     const isJoin = type === 'join';
     const serverName = serverConfig?.name || 'Minecraft Server';
