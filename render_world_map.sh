@@ -147,7 +147,18 @@ fi
 if [ -n "${TARGET_HTML}" ] && ! grep -q "lorsaserv-header" "${TARGET_HTML}"; then
   echo "🎨 Menambahkan bilah kontrol cepat ke halaman Web Map..."
   HEADER_HTML='<div id="lorsaserv-header" style="position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;gap:12px;align-items:center;background:rgba(18,20,24,0.92);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.15);border-radius:30px;padding:8px 20px;box-shadow:0 10px 30px rgba(0,0,0,0.6);font-family:system-ui,-apple-system,sans-serif;font-size:13px;color:#fff;"><span style="font-weight:700;display:flex;align-items:center;gap:6px;"><span style="color:#2ecc71;">●</span> SASY199</span><span style="color:rgba(255,255,255,0.25);">|</span><a href="/map" style="color:#38bdf8;text-decoration:none;font-weight:600;display:flex;align-items:center;gap:4px;">📡 Radar &amp; Koordinat</a><span style="color:rgba(255,255,255,0.25);">|</span><a href="/connect" style="color:#2ecc71;text-decoration:none;font-weight:700;display:flex;align-items:center;gap:4px;">🎮 Masuk Game</a></div>'
-  sed -i "s|</body>|${HEADER_HTML}</body>|g" "${TARGET_HTML}"
+  node -e '
+    const fs = require("fs");
+    const file = process.argv[1];
+    const header = process.argv[2];
+    if (fs.existsSync(file)) {
+      let content = fs.readFileSync(file, "utf8");
+      if (!content.includes("lorsaserv-header")) {
+        content = content.replace("</body>", header + "</body>");
+        fs.writeFileSync(file, content, "utf8");
+      }
+    }
+  ' "${TARGET_HTML}" "${HEADER_HTML}"
 fi
 
 echo "=========================================================="
