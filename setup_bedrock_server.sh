@@ -74,6 +74,13 @@ sed -i 's/^tick-distance=.*/tick-distance=4/' server.properties
 sed -i 's/^max-players=.*/max-players=10/' server.properties
 sed -i 's/^max-threads=.*/max-threads=4/' server.properties
 
+# Pastikan transport menggunakan NetherNet (wajib untuk BDS 1.26+)
+if grep -q "^transport=" server.properties; then
+    sed -i 's/^transport=.*/transport=nethernet/' server.properties
+else
+    echo "transport=nethernet" >> server.properties
+fi
+
 # 6. Pasang Service systemd agar server jalan otomatis & bisa dikontrol Bot
 echo "[6/6] Menyiapkan systemd service (minecraft-bedrock.service)..."
 SERVICE_FILE="/etc/systemd/system/minecraft-bedrock.service"
