@@ -34,7 +34,10 @@ echo "✅ permissions.json berhasil dikonfigurasi."
 # 2. Aktifkan Beta APIs / GameTest di level.dat agar script chatSend dapat berjalan
 echo "[2/4] Memeriksa & mengaktifkan Beta APIs di level.dat..."
 if command -v python3 &> /dev/null; then
-  python3 -m pip install --quiet nbtlib 2>/dev/null || pip3 install --quiet nbtlib 2>/dev/null || sudo apt-get install -y python3-pip && pip3 install --quiet nbtlib 2>/dev/null || true
+  if ! python3 -c "import nbtlib" &>/dev/null; then
+    echo "Mengunduh modul nbtlib..."
+    python3 -m pip install --quiet --break-system-packages nbtlib 2>/dev/null || pip3 install --quiet nbtlib 2>/dev/null || { sudo apt-get update -y && sudo apt-get install -y python3-pip && pip3 install --quiet --break-system-packages nbtlib 2>/dev/null; } || true
+  fi
   python3 "$SCRIPT_DIR/enable_experiments.py" "$BEDROCK_DIR" || true
 else
   echo "ℹ️ python3 tidak ditemukan, melewati modifikasi level.dat otomatis."

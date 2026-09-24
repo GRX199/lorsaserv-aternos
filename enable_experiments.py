@@ -73,7 +73,7 @@ def main():
         found = False
         for root, dirs, files in os.walk(worlds_dir):
             for file in files:
-                if file == "level.dat":
+                if file in ("level.dat", "level.dat_old"):
                     level_path = os.path.join(root, file)
                     enable_experiments_for_file(level_path)
                     found = True
