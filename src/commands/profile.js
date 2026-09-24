@@ -35,12 +35,15 @@ module.exports = {
     const lastSeen = data?.lastSeen ? `<t:${Math.floor(data.lastSeen / 1000)}:R>` : 'Belum pernah';
     const sessions = data?.sessions || 0;
 
+    const { getSkinUrls } = require('../skinHelper');
+    const skin = await getSkinUrls(targetName);
+
     const embed = new EmbedBuilder()
       .setColor(isLiveOnline ? 0x2ecc71 : 0x3498db)
       .setTitle(`🏆 Profil Pemain: ${targetName}`)
       .setDescription(`Statistik aktivitas & penampilan karakter di server Minecraft Bedrock:`)
-      .setThumbnail(`https://mc-heads.net/avatar/${encodeURIComponent(targetName)}/100`)
-      .setImage(`https://mc-heads.net/body/${encodeURIComponent(targetName)}/right`)
+      .setThumbnail(skin.avatar)
+      .setImage(skin.body)
       .addFields(
         {
           name: '📡 Status Kehadiran',

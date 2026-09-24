@@ -232,6 +232,22 @@ class PlayerLogMonitor {
       return;
     }
 
+    // 0.8. Deteksi Snapshot Pemain Real-Time: [PLAYER_SNAPSHOT] {...}
+    if (line.includes('[PLAYER_SNAPSHOT]')) {
+      const idx = line.indexOf('[PLAYER_SNAPSHOT]');
+      let jsonStr = line.substring(idx + 17).trim();
+      const startJson = jsonStr.indexOf('{');
+      const endJson = jsonStr.lastIndexOf('}');
+      if (startJson !== -1 && endJson !== -1) {
+        jsonStr = jsonStr.substring(startJson, endJson + 1);
+      }
+      try {
+        const data = JSON.parse(jsonStr);
+        this.saveOfflinePlayerData(data);
+      } catch {}
+      return;
+    }
+
     // 1. Teruskan baris log ke buffer streaming Discord channel
     this.forwardLogToChannel(line);
 
@@ -701,7 +717,59 @@ class PlayerLogMonitor {
    * Mengirim scriptevent bot:inv <targetName> ke konsol server BDS
    * dan menunggu respon JSON [INV_RES]
    */
-  async queryPlayerInventory(playerName, timeoutMs = 6000) {
+  /**
+   * Menyimpan data snapshot pemain ke database offline_players.json
+   */
+  saveOfflinePlayerData(data) {
+    if (!data || !data.name) return;
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const filePath = path.join(__dirname, '..', 'data', 'offline_players.json');
+    try {
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+      let current = {};
+      if (fs.existsSync(filePath)) {
+        try { current = JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch {}
+      }
+
+      const key = data.name.toLowerCase().trim();
+      current[key] = {
+        ...(current[key] || {}),
+        ...data,
+        updatedAt: Date.now()
+      };
+
+      fs.writeFileSync(filePath, JSON.stringify(current, null, 2), 'utf8');
+    } catch (err) {
+      console.warn('[PlayerLogMonitor] Gagal simpan offline_players.json:', err.message);
+    }
+  }
+
+  /**
+   * Mengambil data terakhir pemain yang tersimpan di offline_players.json
+   */
+  getOfflinePlayerData(playerName) {
+    if (!playerName) return null;
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const filePath = path.join(__dirname, '..', 'data', 'offline_players.json');
+    try {
+      if (fs.existsSync(filePath)) {
+        const current = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        const key = playerName.toLowerCase().trim();
+        return current[key] || null;
+      }
+    } catch {}
+    return null;
+  }
+
+  /**
+   * Mengirim scriptevent bot:inv <targetName> ke konsol server BDS
+   * Jika pemain offline atau server mati, otomatis mengambil data terakhir dari database offline
+   */
+  async queryPlayerInventory(playerName, timeoutMs = 4000) {
     const { sendConsoleCommand } = require('./serverController');
     const target = playerName.trim();
     const key = target.toLowerCase();
@@ -710,24 +778,46 @@ class PlayerLogMonitor {
       const timer = setTimeout(() => {
         if (this.inventoryCallbacks.has(key)) {
           this.inventoryCallbacks.delete(key);
-          resolve({
-            error: `Waktu habis (timeout ${Math.round(timeoutMs / 1000)}s) menunggu respon dari server.\nPastikan server Minecraft aktif, behavior pack terpasang, dan pemain **${target}** sedang berada di dalam server.`
-          });
+          const cached = this.getOfflinePlayerData(target);
+          if (cached && (cached.armor || cached.hotbar || cached.storage)) {
+            resolve({ ...cached, isOffline: true });
+          } else {
+            resolve({
+              error: `Pemain **${target}** sedang offline dan belum memiliki riwayat inventory tersimpan di database.`
+            });
+          }
         }
       }, timeoutMs);
 
       this.inventoryCallbacks.set(key, (data) => {
         clearTimeout(timer);
-        resolve(data);
+        if (data.offline) {
+          const cached = this.getOfflinePlayerData(target);
+          if (cached && (cached.armor || cached.hotbar || cached.storage)) {
+            resolve({ ...cached, isOffline: true });
+          } else {
+            resolve({
+              error: `Pemain **${target}** sedang offline dan belum memiliki riwayat inventory tersimpan di database.`
+            });
+          }
+        } else {
+          this.saveOfflinePlayerData(data);
+          resolve(data);
+        }
       });
 
       const cmdResult = sendConsoleCommand(`scriptevent bot:inv ${target}`);
       if (!cmdResult.success) {
         clearTimeout(timer);
         this.inventoryCallbacks.delete(key);
-        resolve({
-          error: `Gagal mengirim perintah ke konsol server: ${cmdResult.error || cmdResult.message || 'Server offline atau screen tidak ditemukan'}.`
-        });
+        const cached = this.getOfflinePlayerData(target);
+        if (cached && (cached.armor || cached.hotbar || cached.storage)) {
+          resolve({ ...cached, isOffline: true });
+        } else {
+          resolve({
+            error: `Server offline & pemain **${target}** belum memiliki data tersimpan.`
+          });
+        }
       }
     });
   }
@@ -737,6 +827,7 @@ class PlayerLogMonitor {
    */
   handleInventoryResponse(data) {
     if (!data) return;
+    if (data.name && !data.offline) this.saveOfflinePlayerData(data);
 
     // 1. Cocokkan berdasarkan nama pemain
     if (data.name) {
@@ -770,9 +861,9 @@ class PlayerLogMonitor {
 
   /**
    * Mengirim scriptevent bot:locate <targetName> ke konsol server BDS
-   * dan menunggu respon JSON [LOC_RES]
+   * Jika pemain offline atau server mati, otomatis mengambil koordinat terakhir dari database offline
    */
-  async queryPlayerLocation(playerName, timeoutMs = 6000) {
+  async queryPlayerLocation(playerName, timeoutMs = 4000) {
     const { sendConsoleCommand } = require('./serverController');
     const target = playerName.trim();
     const key = target.toLowerCase();
@@ -781,24 +872,46 @@ class PlayerLogMonitor {
       const timer = setTimeout(() => {
         if (this.locationCallbacks.has(key)) {
           this.locationCallbacks.delete(key);
-          resolve({
-            error: `Waktu habis (timeout ${Math.round(timeoutMs / 1000)}s) menunggu respon dari server.\nPastikan server Minecraft aktif, behavior pack terpasang, dan pemain **${target}** sedang berada di dalam server.`
-          });
+          const cached = this.getOfflinePlayerData(target);
+          if (cached && cached.x !== undefined) {
+            resolve({ ...cached, isOffline: true });
+          } else {
+            resolve({
+              error: `Pemain **${target}** sedang offline dan belum memiliki riwayat koordinat tersimpan di database.`
+            });
+          }
         }
       }, timeoutMs);
 
       this.locationCallbacks.set(key, (data) => {
         clearTimeout(timer);
-        resolve(data);
+        if (data.offline) {
+          const cached = this.getOfflinePlayerData(target);
+          if (cached && cached.x !== undefined) {
+            resolve({ ...cached, isOffline: true });
+          } else {
+            resolve({
+              error: `Pemain **${target}** sedang offline dan belum memiliki riwayat koordinat tersimpan di database.`
+            });
+          }
+        } else {
+          this.saveOfflinePlayerData(data);
+          resolve(data);
+        }
       });
 
       const cmdResult = sendConsoleCommand(`scriptevent bot:locate ${target}`);
       if (!cmdResult.success) {
         clearTimeout(timer);
         this.locationCallbacks.delete(key);
-        resolve({
-          error: `Gagal mengirim perintah ke konsol server: ${cmdResult.error || cmdResult.message || 'Server offline atau screen tidak ditemukan'}.`
-        });
+        const cached = this.getOfflinePlayerData(target);
+        if (cached && cached.x !== undefined) {
+          resolve({ ...cached, isOffline: true });
+        } else {
+          resolve({
+            error: `Server offline & pemain **${target}** belum memiliki data koordinat tersimpan.`
+          });
+        }
       }
     });
   }
@@ -808,6 +921,7 @@ class PlayerLogMonitor {
    */
   handleLocationResponse(data) {
     if (!data) return;
+    if (data.name && !data.offline) this.saveOfflinePlayerData(data);
 
     if (data.name) {
       const key = data.name.toLowerCase();

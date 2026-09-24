@@ -203,6 +203,9 @@ class StatusManager {
         components: Array.isArray(buttons) ? buttons : [buttons]
       });
 
+      // Sematkan (pin) pesan agar tidak hilang
+      await message.pin().catch(() => {});
+
       this.state.serverMessages[s.id] = message.id;
     }
 

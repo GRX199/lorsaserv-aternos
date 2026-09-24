@@ -66,6 +66,9 @@ module.exports = {
         components: buttons
       });
 
+      // Pin pesan agar mudah ditemukan
+      await panelMsg.pin().catch(() => {});
+
       // Simpan ID pesan panel admin ke state
       statusManager.state = statusManager.state || {};
       statusManager.state.adminChannelId = targetChannel.id;

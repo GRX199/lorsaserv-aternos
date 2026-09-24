@@ -77,11 +77,17 @@ module.exports = {
         portalCalc = `🚪 **Estimasi Portal di Nether (X/8, Z/8):** \`X: ${netherX}, Z: ${netherZ}\``;
       }
 
+      const isOffline = Boolean(res.isOffline);
+      const { getSkinUrls } = require('../skinHelper');
+      const skin = await getSkinUrls(res.name);
+
       const embed = new EmbedBuilder()
-        .setColor(dimColor)
-        .setTitle(`📍 Lokasi Pemain: ${res.name}`)
-        .setDescription(`Koordinat posisi dan dimensi pemain di Minecraft Bedrock:`)
-        .setThumbnail(`https://mc-heads.net/avatar/${encodeURIComponent(res.name)}/100`)
+        .setColor(isOffline ? 0x95a5a6 : dimColor)
+        .setTitle(`📍 Lokasi Pemain: ${res.name} ${isOffline ? '(⚪ Offline)' : '(🟢 Online)'}`)
+        .setDescription(isOffline
+          ? `⚠️ *Pemain sedang offline. Menampilkan koordinat terakhir saat logout:*`
+          : `Koordinat posisi dan dimensi pemain di Minecraft Bedrock:`)
+        .setThumbnail(skin.avatar)
         .addFields(
           {
             name: '🗺️ Dimensi',

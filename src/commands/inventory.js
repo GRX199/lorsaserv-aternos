@@ -134,12 +134,18 @@ module.exports = {
       // Format Status Vitalitas
       const healthStr = res.health !== null ? `❤️ **${res.health}/${res.maxHealth || 20} HP**` : '❤️ *N/A*';
       const levelStr = `⭐ **Level ${res.level || 0}**`;
+      const isOffline = Boolean(res.isOffline);
+
+      const { getSkinUrls } = require('../skinHelper');
+      const skin = await getSkinUrls(res.name);
 
       const embed = new EmbedBuilder()
-        .setColor(0x00b0f4)
-        .setTitle(`🎒 Inventory Pemain: ${res.name}`)
-        .setDescription(`Status & perlengkapan pemain saat ini di server Minecraft Bedrock:`)
-        .setThumbnail(`https://mc-heads.net/avatar/${encodeURIComponent(res.name)}/100`)
+        .setColor(isOffline ? 0x95a5a6 : 0x00b0f4)
+        .setTitle(`🎒 Inventory Pemain: ${res.name} ${isOffline ? '(⚪ Offline)' : '(🟢 Online)'}`)
+        .setDescription(isOffline
+          ? `⚠️ *Pemain sedang offline. Menampilkan data inventaris terakhir saat logout:*`
+          : `Status & perlengkapan pemain saat ini di server Minecraft Bedrock:`)
+        .setThumbnail(skin.avatar)
         .addFields(
           {
             name: '📊 Status Pemain',

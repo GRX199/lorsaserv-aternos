@@ -82,10 +82,91 @@ try {
   console.warn(`[Scripting Error playerLeave] ${e.message}`);
 }
 
-// 5. Listener scriptEventReceive untuk inspeksi inventory pemain dari Discord (/inventory <gamertag>)
+// Helper untuk mengambil seluruh data lokasi, vitalitas, dan isi inventory pemain
+function getPlayerFullData(player) {
+  const loc = player.location;
+  const dim = player.dimension?.id ? player.dimension.id.replace(/^minecraft:/, "") : "overworld";
+
+  // Status Darah (Health) & XP
+  const healthComp = player.getComponent("health") || player.getComponent("minecraft:health");
+  const health = healthComp ? Math.round(healthComp.currentValue) : null;
+  const maxHealth = healthComp ? Math.round(healthComp.defaultValue) : null;
+  const level = player.level || 0;
+
+  // Armor & Offhand
+  const armor = {};
+  const equippable = player.getComponent("equippable") || player.getComponent("minecraft:equippable");
+  if (equippable) {
+    const slots = [
+      { key: "head", slot: EquipmentSlot?.Head || "Head" },
+      { key: "chest", slot: EquipmentSlot?.Chest || "Chest" },
+      { key: "legs", slot: EquipmentSlot?.Legs || "Legs" },
+      { key: "feet", slot: EquipmentSlot?.Feet || "Feet" },
+      { key: "offhand", slot: EquipmentSlot?.Offhand || "Offhand" }
+    ];
+
+    for (const s of slots) {
+      try {
+        const item = equippable.getEquipment(s.slot);
+        if (item) {
+          armor[s.key] = {
+            id: item.typeId.replace(/^minecraft:/, ""),
+            amount: item.amount || 1,
+            name: item.nameTag || null
+          };
+        }
+      } catch {}
+    }
+  }
+
+  // Hotbar (Slot 0-8) & Storage (Slot 9-35)
+  const hotbar = [];
+  const storage = [];
+  const invComp = player.getComponent("inventory") || player.getComponent("minecraft:inventory");
+  const container = invComp?.container;
+
+  if (container) {
+    for (let i = 0; i < container.size; i++) {
+      try {
+        const item = container.getItem(i);
+        if (item) {
+          const itemData = {
+            slot: i,
+            id: item.typeId.replace(/^minecraft:/, ""),
+            amount: item.amount || 1,
+            name: item.nameTag || null
+          };
+          if (i < 9) {
+            hotbar.push(itemData);
+          } else {
+            storage.push(itemData);
+          }
+        }
+      } catch {}
+    }
+  }
+
+  return {
+    name: player.name,
+    x: Math.round(loc.x * 10) / 10,
+    y: Math.round(loc.y * 10) / 10,
+    z: Math.round(loc.z * 10) / 10,
+    dimension: dim,
+    health,
+    maxHealth,
+    level,
+    armor,
+    hotbar,
+    storage,
+    updatedAt: Date.now()
+  };
+}
+
+// 5. Listener scriptEventReceive untuk inspeksi inventory & lokasi pemain (/inventory & /locate)
 try {
   if (system?.afterEvents?.scriptEventReceive && typeof system.afterEvents.scriptEventReceive.subscribe === "function") {
     system.afterEvents.scriptEventReceive.subscribe((event) => {
+      // Query Inventory
       if (event.id === "bot:inv") {
         const targetName = (event.message || "").trim();
         if (!targetName) return;
@@ -94,87 +175,19 @@ try {
         const player = players.find(p => p.name.toLowerCase() === targetName.toLowerCase());
 
         if (!player) {
-          console.warn(`[INV_RES] {"error":"Pemain '${targetName}' sedang offline atau tidak ditemukan."}`);
+          console.warn(`[INV_RES] {"offline":true,"name":"${targetName}"}`);
           return;
         }
 
         try {
-          // Status Darah (Health) & XP
-          const healthComp = player.getComponent("health") || player.getComponent("minecraft:health");
-          const health = healthComp ? Math.round(healthComp.currentValue) : null;
-          const maxHealth = healthComp ? Math.round(healthComp.defaultValue) : null;
-          const level = player.level || 0;
-
-          // Armor & Offhand
-          const armor = {};
-          const equippable = player.getComponent("equippable") || player.getComponent("minecraft:equippable");
-          if (equippable) {
-            const slots = [
-              { key: "head", slot: EquipmentSlot?.Head || "Head" },
-              { key: "chest", slot: EquipmentSlot?.Chest || "Chest" },
-              { key: "legs", slot: EquipmentSlot?.Legs || "Legs" },
-              { key: "feet", slot: EquipmentSlot?.Feet || "Feet" },
-              { key: "offhand", slot: EquipmentSlot?.Offhand || "Offhand" }
-            ];
-
-            for (const s of slots) {
-              try {
-                const item = equippable.getEquipment(s.slot);
-                if (item) {
-                  armor[s.key] = {
-                    id: item.typeId.replace(/^minecraft:/, ""),
-                    amount: item.amount || 1,
-                    name: item.nameTag || null
-                  };
-                }
-              } catch {}
-            }
-          }
-
-          // Hotbar (Slot 0-8) & Storage (Slot 9-35)
-          const hotbar = [];
-          const storage = [];
-          const invComp = player.getComponent("inventory") || player.getComponent("minecraft:inventory");
-          const container = invComp?.container;
-
-          if (container) {
-            for (let i = 0; i < container.size; i++) {
-              try {
-                const item = container.getItem(i);
-                if (item) {
-                  const itemData = {
-                    slot: i,
-                    id: item.typeId.replace(/^minecraft:/, ""),
-                    amount: item.amount || 1,
-                    name: item.nameTag || null
-                  };
-                  if (i < 9) {
-                    hotbar.push(itemData);
-                  } else {
-                    storage.push(itemData);
-                  }
-                }
-              } catch {}
-            }
-          }
-
-          const res = {
-            name: player.name,
-            health,
-            maxHealth,
-            level,
-            armor,
-            hotbar,
-            storage
-          };
-
-          console.warn(`[INV_RES] ${JSON.stringify(res)}`);
+          const data = getPlayerFullData(player);
+          console.warn(`[INV_RES] ${JSON.stringify(data)}`);
         } catch (err) {
           console.warn(`[INV_RES] {"error":"Gagal membaca inventory: ${err.message}"}`);
         }
       }
 
-      // Handler untuk inspeksi lokasi/koordinat pemain (/locate <gamertag>)
+      // Query Lokasi / Koordinat
       if (event.id === "bot:locate") {
         const targetName = (event.message || "").trim();
         if (!targetName) return;
@@ -183,21 +196,13 @@ try {
         const player = players.find(p => p.name.toLowerCase() === targetName.toLowerCase());
 
         if (!player) {
-          console.warn(`[LOC_RES] {"error":"Pemain '${targetName}' sedang offline atau tidak ditemukan."}`);
+          console.warn(`[LOC_RES] {"offline":true,"name":"${targetName}"}`);
           return;
         }
 
         try {
-          const loc = player.location;
-          const dim = player.dimension?.id ? player.dimension.id.replace(/^minecraft:/, "") : "overworld";
-          const res = {
-            name: player.name,
-            x: Math.round(loc.x * 10) / 10,
-            y: Math.round(loc.y * 10) / 10,
-            z: Math.round(loc.z * 10) / 10,
-            dimension: dim
-          };
-          console.warn(`[LOC_RES] ${JSON.stringify(res)}`);
+          const data = getPlayerFullData(player);
+          console.warn(`[LOC_RES] ${JSON.stringify(data)}`);
         } catch (err) {
           console.warn(`[LOC_RES] {"error":"Gagal membaca lokasi: ${err.message}"}`);
         }
@@ -208,6 +213,21 @@ try {
 } catch (e) {
   console.warn(`[Scripting Error scriptEventReceive] ${e.message}`);
 }
+
+// 5.5. Snapshot otomatis setiap 20 detik untuk semua pemain yang aktif (untuk cek data saat offline)
+try {
+  if (system?.runInterval) {
+    system.runInterval(() => {
+      try {
+        const players = world.getPlayers();
+        for (const p of players) {
+          const data = getPlayerFullData(p);
+          console.warn(`[PLAYER_SNAPSHOT] ${JSON.stringify(data)}`);
+        }
+      } catch {}
+    }, 400); // 400 ticks = 20 detik
+  }
+} catch (e) {}
 
 // 6. Listener entityDie untuk Death Feed (Notifikasi Kematian Pemain)
 try {
