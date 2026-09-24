@@ -16,6 +16,7 @@ class StatusManager {
     this.config = config;
     this.serverStatuses = {};
     this.previousOnlineStates = {};
+    this.previousPlayerCounts = {};
     this.statusTimer = null;
     this.channelNameTimer = null;
     this.lastChannelName = null;
@@ -114,6 +115,24 @@ class StatusManager {
    */
   setChatBridgeChannelId(channelId) {
     this.state.chatBridgeChannelId = channelId;
+    this.saveState();
+  }
+
+  /**
+   * Mengambil ID channel untuk notifikasi pemain masuk & keluar
+   */
+  getAlertChannelId() {
+    return process.env.PLAYER_ALERT_CHANNEL_ID
+      || this.state.playerAlertChannelId
+      || this.config.notifications?.playerJoin?.channelId
+      || null;
+  }
+
+  /**
+   * Menyimpan ID channel untuk notifikasi pemain masuk & keluar
+   */
+  setAlertChannelId(channelId) {
+    this.state.playerAlertChannelId = channelId;
     this.saveState();
   }
 
@@ -255,7 +274,8 @@ class StatusManager {
     // Jika notifikasi pemain dinonaktifkan secara eksplisit, abaikan
     if (alertConfig && alertConfig.enabled === false) return;
 
-    const channelId = alertConfig?.channelId
+    const channelId = this.getAlertChannelId()
+      || alertConfig?.channelId
       || notifyConfig.playerAlertChannelId
       || process.env.PLAYER_ALERT_CHANNEL_ID
       || process.env.STATUS_CHANNEL_ID
@@ -274,25 +294,31 @@ class StatusManager {
           c.isTextBased() && (
             c.name === 'chat-minecraft' ||
             c.name === 'minecraft-chat' ||
+            c.name === 'status-server' ||
             c.name === 'log-server' ||
-            c.name === 'status-server'
+            c.name === 'general' ||
+            c.name === 'umum'
           )
         );
         if (found) {
           channel = found;
           break;
         }
+        if (guild.systemChannel && guild.systemChannel.isTextBased()) {
+          channel = guild.systemChannel;
+          break;
+        }
       }
     }
 
     if (!channel || !channel.isTextBased()) {
-      console.warn(`[StatusManager] Notifikasi player ${type} (${playerName}) tidak dapat dikirim: Channel notifikasi belum diatur. Jalankan /setup-chat atau /setup-status`);
+      console.warn(`[StatusManager] Notifikasi player ${type} (${playerName}) tidak dapat dikirim: Channel notifikasi belum diatur. Jalankan /setup-alerts atau /setup-status`);
       return;
     }
 
     const isJoin = type === 'join';
     const serverName = serverConfig?.name || 'Minecraft Server';
-    const maxPlayers = serverConfig?.isLocal ? 10 : 20;
+    const maxPlayers = this.serverStatuses[serverConfig?.id]?.players?.max || (serverConfig?.isLocal ? 10 : 20);
     const countStr = currentCount !== null ? `${currentCount} / ${maxPlayers}` : null;
     const nowUnix = Math.floor(Date.now() / 1000);
 
@@ -365,6 +391,24 @@ class StatusManager {
           }
         }
         this.previousOnlineStates[s.id] = status.online;
+
+        // 1.5. Fail-safe: Deteksi pertambahan pemain lewat UDP ping jika log monitor terlewat
+        const prevCount = this.previousPlayerCounts[s.id] ?? 0;
+        const currentCount = status.players?.online ?? 0;
+        if (status.online && currentCount > prevCount) {
+          const diff = currentCount - prevCount;
+          console.log(`[StatusManager] UDP Ping mendeteksi ${diff} pemain baru bergabung ke ${s.name}!`);
+          if (this.playerLogMonitor && this.playerLogMonitor.onlinePlayers.size === 0) {
+            await this.sendPlayerNotification('join', 'Pemain (Bedrock)', s, currentCount);
+          }
+        } else if (status.online && currentCount < prevCount) {
+          const diff = prevCount - currentCount;
+          console.log(`[StatusManager] UDP Ping mendeteksi ${diff} pemain keluar dari ${s.name}!`);
+          if (this.playerLogMonitor && this.playerLogMonitor.onlinePlayers.size === 0) {
+            await this.sendPlayerNotification('leave', 'Pemain (Bedrock)', s, currentCount);
+          }
+        }
+        this.previousPlayerCounts[s.id] = currentCount;
 
         // 2. Update atau kirim Embed Message di Discord channel
         if (channel && channel.isTextBased()) {

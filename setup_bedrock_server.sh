@@ -91,7 +91,7 @@ Type=simple
 User=$CURRENT_USER
 WorkingDirectory=$BEDROCK_DIR
 Environment="LD_LIBRARY_PATH=.:$BEDROCK_DIR"
-ExecStart=/usr/bin/screen -DmS mc-bedrock $BEDROCK_DIR/bedrock_server
+ExecStart=/usr/bin/screen -L -Logfile $BEDROCK_DIR/server.log -DmS mc-bedrock $BEDROCK_DIR/bedrock_server
 Restart=on-failure
 RestartSec=5s
 KillSignal=SIGINT

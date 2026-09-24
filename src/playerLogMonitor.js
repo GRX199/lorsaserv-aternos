@@ -48,17 +48,52 @@ class PlayerLogMonitor {
     }
   }
 
+  getLogFilePath() {
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const homeDir = process.env.HOME || '/home/ubuntu';
+    const candidates = [
+      path.join(homeDir, 'bedrock-server', 'server.log'),
+      path.join(homeDir, 'bedrock-server', 'screenlog.0'),
+      path.join(homeDir, 'bedrock-server', 'bedrock_server.log'),
+    ];
+
+    for (const file of candidates) {
+      if (fs.existsSync(file)) {
+        return file;
+      }
+    }
+
+    const bedrockDir = path.join(homeDir, 'bedrock-server');
+    if (fs.existsSync(bedrockDir)) {
+      try {
+        const defaultLog = path.join(bedrockDir, 'server.log');
+        fs.writeFileSync(defaultLog, '', { flag: 'a' });
+        return defaultLog;
+      } catch {}
+    }
+    return null;
+  }
+
   spawnWatcher() {
     if (this.isStopping) return;
 
     this.cleanup();
 
-    const cmd = this.useSudo ? 'sudo' : 'journalctl';
-    const args = this.useSudo
-      ? ['-n', 'journalctl', '-u', 'minecraft-bedrock', '-u', 'minecraft-paper', '-f', '-n', '0']
-      : ['-u', 'minecraft-bedrock', '-u', 'minecraft-paper', '-f', '-n', '0'];
+    const logFile = this.getLogFilePath();
+    let cmd, args;
 
-    console.log(`[PlayerLogMonitor] Menjalankan pemantau log: ${cmd} ${args.join(' ')}`);
+    if (logFile) {
+      cmd = 'tail';
+      args = ['-F', '-n', '0', logFile];
+      console.log(`[PlayerLogMonitor] Memantau file log langsung: ${cmd} ${args.join(' ')}`);
+    } else {
+      cmd = this.useSudo ? 'sudo' : 'journalctl';
+      args = this.useSudo
+        ? ['-n', 'journalctl', '-u', 'minecraft-bedrock', '-u', 'minecraft-paper', '-f', '-n', '0']
+        : ['-u', 'minecraft-bedrock', '-u', 'minecraft-paper', '-f', '-n', '0'];
+      console.log(`[PlayerLogMonitor] Menjalankan pemantau log systemd: ${cmd} ${args.join(' ')}`);
+    }
 
     try {
       this.process = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -163,8 +198,12 @@ class PlayerLogMonitor {
 
     // 2. Deteksi Player Connected / Join
     // Contoh BDS: Player connected: Steve, xuid: ...
+    // Contoh Behavior Pack: [Scripting] [PLAYER_JOIN] Steve
     // Contoh PaperMC: Steve joined the game
     let joinMatch = line.match(/Player connected:\s*([^,\n\r]+)/i);
+    if (!joinMatch) {
+      joinMatch = line.match(/\[PLAYER_JOIN\]\s*([^\n\r]+)/i);
+    }
     if (!joinMatch) {
       joinMatch = line.match(/(?:INFO\]:|\/INFO\]:)\s*([a-zA-Z0-9_.* -]+?)\s+joined the game/i);
     }
@@ -172,18 +211,25 @@ class PlayerLogMonitor {
       let playerName = joinMatch[1].trim();
       playerName = playerName.replace(/^["']|["']$/g, '').trim();
 
-      if (playerName && !playerName.includes(' ')) {
-        console.log(`[PlayerLogMonitor] 🟢 Player Join Terdeteksi: ${playerName}`);
-        this.onlinePlayers.add(playerName);
-        this.notifyPlayerChange('join', playerName);
+      // Gamertag Xbox / Minecraft Bedrock dapat memiliki spasi dan panjang hingga 24 karakter
+      if (playerName && playerName.length > 0 && playerName.length <= 24 && !playerName.includes('INFO') && !playerName.includes('WARN')) {
+        if (!this.onlinePlayers.has(playerName)) {
+          console.log(`[PlayerLogMonitor] 🟢 Player Join Terdeteksi: ${playerName}`);
+          this.onlinePlayers.add(playerName);
+          this.notifyPlayerChange('join', playerName);
+        }
         return;
       }
     }
 
     // 3. Deteksi Player Disconnected / Leave
     // Contoh BDS: Player disconnected: Steve, xuid: ...
+    // Contoh Behavior Pack: [Scripting] [PLAYER_LEAVE] Steve
     // Contoh PaperMC: Steve left the game ATAU Steve lost connection: Disconnected
     let leaveMatch = line.match(/Player disconnected:\s*([^,\n\r]+)/i);
+    if (!leaveMatch) {
+      leaveMatch = line.match(/\[PLAYER_LEAVE\]\s*([^\n\r]+)/i);
+    }
     if (!leaveMatch) {
       leaveMatch = line.match(/(?:INFO\]:|\/INFO\]:)\s*([a-zA-Z0-9_.* -]+?)\s+(?:left the game|lost connection:)/i);
     }
@@ -191,7 +237,7 @@ class PlayerLogMonitor {
       let playerName = leaveMatch[1].trim();
       playerName = playerName.replace(/^["']|["']$/g, '').trim();
 
-      if (playerName && !playerName.includes(' ')) {
+      if (playerName && playerName.length > 0 && playerName.length <= 24 && !playerName.includes('INFO') && !playerName.includes('WARN')) {
         console.log(`[PlayerLogMonitor] 🔴 Player Leave Terdeteksi: ${playerName}`);
         this.onlinePlayers.delete(playerName);
         this.notifyPlayerChange('leave', playerName);
@@ -434,17 +480,32 @@ class PlayerLogMonitor {
       // Ambil 5 baris log terakhir agar channel langsung menampilkan aktivitas server
       let recentLogs = '';
       try {
-        const { execSync } = require('node:child_process');
-        const raw = execSync('journalctl -u minecraft-bedrock -n 5 --no-pager', { encoding: 'utf8', timeout: 4000 });
-        const lines = raw.trim().split('\n').filter(l => l && !l.includes('how_to.html') && !l.includes('Telemetry'));
-        recentLogs = lines.map(l => {
-          const colonIdx = l.indexOf('bedrock_server[');
-          if (colonIdx !== -1) {
-            const after = l.indexOf(']: ', colonIdx);
-            if (after !== -1) l = l.substring(after + 3);
-          }
-          return l.replace(/\[\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2}:\d{2}):\d{3}\s+([A-Z]+)\]/, '[$1 $2]');
-        }).join('\n');
+        const fs = require('node:fs');
+        const logFile = this.getLogFilePath();
+        if (logFile && fs.existsSync(logFile)) {
+          const raw = fs.readFileSync(logFile, 'utf8');
+          const lines = raw.trim().split('\n').filter(l => l && !l.includes('how_to.html') && !l.includes('Telemetry'));
+          recentLogs = lines.slice(-5).map(l => {
+            const colonIdx = l.indexOf('bedrock_server[');
+            if (colonIdx !== -1) {
+              const after = l.indexOf(']: ', colonIdx);
+              if (after !== -1) l = l.substring(after + 3);
+            }
+            return l.replace(/\[\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2}:\d{2}):\d{3}\s+([A-Z]+)\]/, '[$1 $2]');
+          }).join('\n');
+        } else {
+          const { execSync } = require('node:child_process');
+          const raw = execSync('journalctl -u minecraft-bedrock -n 5 --no-pager', { encoding: 'utf8', timeout: 4000 });
+          const lines = raw.trim().split('\n').filter(l => l && !l.includes('how_to.html') && !l.includes('Telemetry'));
+          recentLogs = lines.map(l => {
+            const colonIdx = l.indexOf('bedrock_server[');
+            if (colonIdx !== -1) {
+              const after = l.indexOf(']: ', colonIdx);
+              if (after !== -1) l = l.substring(after + 3);
+            }
+            return l.replace(/\[\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2}:\d{2}):\d{3}\s+([A-Z]+)\]/, '[$1 $2]');
+          }).join('\n');
+        }
       } catch {}
 
       const msg = [
