@@ -1,27 +1,79 @@
 import { world } from "@minecraft/server";
 
-// 1. Berlangganan event pengiriman chat dari pemain di dalam game
-world.afterEvents.chatSend.subscribe((event) => {
-  const player = event.sender;
-  if (!player) return;
+console.warn("[Scripting] Discord Chat Bridge loaded successfully!");
 
-  const senderName = player.name;
-  const message = event.message;
+let chatSubscribed = false;
 
-  // Format: [CHAT] <NamaPemain> Pesan
-  console.warn(`[CHAT] <${senderName}> ${message}`);
-});
-
-// 2. Berlangganan event pemain masuk / spawn pertama kali ke dunia game
-world.afterEvents.playerSpawn.subscribe((event) => {
-  if (event.initialSpawn && event.player) {
-    console.warn(`[PLAYER_JOIN] ${event.player.name}`);
+// 1. Coba afterEvents.chatSend
+try {
+  if (world?.afterEvents && typeof world.afterEvents.chatSend?.subscribe === "function") {
+    world.afterEvents.chatSend.subscribe((event) => {
+      try {
+        const sender = event.sender?.name || "Player";
+        const message = event.message || "";
+        if (sender && message) {
+          console.warn(`[CHAT] <${sender}> ${message}`);
+        }
+      } catch (err) {
+        console.warn(`[CHAT_ERROR] ${err.message}`);
+      }
+    });
+    chatSubscribed = true;
+    console.warn("[Scripting] Subscribed to afterEvents.chatSend");
   }
-});
+} catch (e) {
+  console.warn(`[Scripting Error chatSend after] ${e.message}`);
+}
 
-// 3. Berlangganan event pemain keluar / disconnect dari game
-world.afterEvents.playerLeave.subscribe((event) => {
-  if (event.playerName) {
-    console.warn(`[PLAYER_LEAVE] ${event.playerName}`);
+// 2. Coba beforeEvents.chatSend jika afterEvents tidak tersedia
+try {
+  if (!chatSubscribed && world?.beforeEvents && typeof world.beforeEvents.chatSend?.subscribe === "function") {
+    world.beforeEvents.chatSend.subscribe((event) => {
+      try {
+        const sender = event.sender?.name || "Player";
+        const message = event.message || "";
+        if (sender && message) {
+          console.warn(`[CHAT] <${sender}> ${message}`);
+        }
+      } catch (err) {
+        console.warn(`[CHAT_ERROR] ${err.message}`);
+      }
+    });
+    chatSubscribed = true;
+    console.warn("[Scripting] Subscribed to beforeEvents.chatSend");
   }
-});
+} catch (e) {
+  console.warn(`[Scripting Error chatSend before] ${e.message}`);
+}
+
+// 3. Berlangganan event pemain masuk / spawn pertama kali ke dunia game
+try {
+  if (world?.afterEvents && typeof world.afterEvents.playerSpawn?.subscribe === "function") {
+    world.afterEvents.playerSpawn.subscribe((event) => {
+      try {
+        if (event.initialSpawn && event.player?.name) {
+          console.warn(`[PLAYER_JOIN] ${event.player.name}`);
+        }
+      } catch (e) {}
+    });
+    console.warn("[Scripting] Subscribed to playerSpawn");
+  }
+} catch (e) {
+  console.warn(`[Scripting Error playerSpawn] ${e.message}`);
+}
+
+// 4. Berlangganan event pemain keluar / disconnect dari game
+try {
+  if (world?.afterEvents && typeof world.afterEvents.playerLeave?.subscribe === "function") {
+    world.afterEvents.playerLeave.subscribe((event) => {
+      try {
+        if (event.playerName) {
+          console.warn(`[PLAYER_LEAVE] ${event.playerName}`);
+        }
+      } catch (e) {}
+    });
+    console.warn("[Scripting] Subscribed to playerLeave");
+  }
+} catch (e) {
+  console.warn(`[Scripting Error playerLeave] ${e.message}`);
+}

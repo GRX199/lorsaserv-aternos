@@ -325,6 +325,10 @@ client.on('messageCreate', async (message) => {
   if (!isBridge) return;
   if (process.platform !== 'linux') return;
 
+  if (statusManager && !statusManager.getChatBridgeChannelId()) {
+    statusManager.setChatBridgeChannelId(message.channelId);
+  }
+
   let content = (message.cleanContent || message.content || '').trim();
   if (!content && message.attachments.size > 0) {
     content = '[Mengirim Media/Lampiran]';
