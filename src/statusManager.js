@@ -200,7 +200,7 @@ class StatusManager {
 
       const message = await channel.send({
         embeds: [embed],
-        components: [buttons]
+        components: Array.isArray(buttons) ? buttons : [buttons]
       });
 
       this.state.serverMessages[s.id] = message.id;
