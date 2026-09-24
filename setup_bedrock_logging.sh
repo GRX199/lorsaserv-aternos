@@ -18,16 +18,18 @@ fi
 
 # 1. Buat file log dan beri izin baca-tulis
 touch "$LOG_FILE"
-chmod 664 "$LOG_FILE"
-echo "✅ File log disiapkan di $LOG_FILE"
+touch "$BEDROCK_DIR/screenlog.0"
+chmod 664 "$LOG_FILE" "$BEDROCK_DIR/screenlog.0" 2>/dev/null || true
+echo "✅ File log disiapkan di $LOG_FILE & screenlog.0"
 
-# 2. Konfigurasi ~/.screenrc agar screen langsung flush log tiap detik
+# 2. Konfigurasi ~/.screenrc dan /etc/screenrc agar screen langsung flush log tiap detik
 cat <<EOF > "$HOME_DIR/.screenrc"
 logfile $LOG_FILE
 logfile flush 1
 deflog on
 EOF
-echo "✅ ~/.screenrc dikonfigurasi (flush 1s & deflog on)"
+sudo cp "$HOME_DIR/.screenrc" /etc/screenrc 2>/dev/null || true
+echo "✅ ~/.screenrc dan /etc/screenrc dikonfigurasi (flush 1s & deflog on)"
 
 # 3. Perbarui ExecStart di systemd service minecraft-bedrock jika belum menggunakan -L -Logfile
 if [ -f "$SERVICE_FILE" ]; then

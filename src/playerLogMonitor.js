@@ -58,6 +58,25 @@ class PlayerLogMonitor {
       path.join(homeDir, 'bedrock-server', 'bedrock_server.log'),
     ];
 
+    // Cari file log yang ada dan memiliki isi (size > 0) dengan mtime terbaru
+    let bestFile = null;
+    let bestMtime = 0;
+
+    for (const file of candidates) {
+      try {
+        if (fs.existsSync(file)) {
+          const stats = fs.statSync(file);
+          if (stats.size > 0 && stats.mtimeMs > bestMtime) {
+            bestFile = file;
+            bestMtime = stats.mtimeMs;
+          }
+        }
+      } catch {}
+    }
+
+    if (bestFile) return bestFile;
+
+    // Fallback jika semua masih 0 byte
     for (const file of candidates) {
       if (fs.existsSync(file)) {
         return file;
