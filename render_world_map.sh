@@ -34,7 +34,7 @@ WORLD_DIR="${BDS_DIR}/worlds/${LEVEL_NAME}"
 
 if [ ! -d "${WORLD_DIR}" ]; then
   # Cek jika ada folder world lain
-  ALT_WORLD=$(find "${BDS_DIR}/worlds" -mindepth 1 -maxdepth 1 -type d | head -n 1 || true)
+  ALT_WORLD=$(find "${BDS_DIR}/worlds" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n 1 || true)
   if [ -n "${ALT_WORLD}" ] && [ -d "${ALT_WORLD}/db" ]; then
     WORLD_DIR="${ALT_WORLD}"
     echo "ℹ️  Menggunakan folder world alternatif: ${WORLD_DIR}"
@@ -48,29 +48,60 @@ echo "📁 Direktori World: ${WORLD_DIR}"
 echo "📁 Direktori Output: ${OUTPUT_DIR}"
 
 # 2. Cek & Pasang uNmINeD CLI jika belum ada
+mkdir -p "${UNMINED_DIR}"
+
 if [ ! -f "${UNMINED_BIN}" ]; then
-  echo "📥 uNmINeD CLI belum terpasang. Mengunduh uNmINeD CLI Linux x64..."
-  mkdir -p "${UNMINED_DIR}"
-  TMP_ARCHIVE="/tmp/unmined-cli.tar.gz"
+  # Cek apakah sudah pernah ter-ekstrak di dalam subfolder (misal unmined-cli_0.20.10-dev_linux-x64)
+  FOUND_BIN=$(find "${UNMINED_DIR}" -name "unmined-cli" -type f 2>/dev/null | head -n 1 || true)
+  if [ -n "${FOUND_BIN}" ] && [ -f "${FOUND_BIN}" ]; then
+    echo "ℹ️  Menemukan uNmINeD CLI di subfolder: ${FOUND_BIN}"
+    SUBDIR=$(dirname "${FOUND_BIN}")
+    if [ "${SUBDIR}" != "${UNMINED_DIR}" ]; then
+      cp -r "${SUBDIR}"/* "${UNMINED_DIR}/" || true
+    fi
+  else
+    echo "📥 uNmINeD CLI belum terpasang. Mengunduh uNmINeD CLI Linux x64..."
+    TMP_ARCHIVE="/tmp/unmined-cli.tar.gz"
 
-  ARCH=$(uname -m)
-  DOWNLOAD_URL="https://unmined.net/download/unmined-cli-linux-x64-dev/"
-  if [ "${ARCH}" = "aarch64" ] || [ "${ARCH}" = "arm64" ]; then
-    DOWNLOAD_URL="https://unmined.net/download/unmined-cli-linux-arm64-dev/"
-  fi
+    ARCH=$(uname -m)
+    DOWNLOAD_URL="https://unmined.net/download/unmined-cli-linux-x64-dev/"
+    if [ "${ARCH}" = "aarch64" ] || [ "${ARCH}" = "arm64" ]; then
+      DOWNLOAD_URL="https://unmined.net/download/unmined-cli-linux-arm64-dev/"
+    fi
 
-  curl -f -sSL "${DOWNLOAD_URL}" -o "${TMP_ARCHIVE}" || {
-    echo "❌ Gagal mengunduh uNmINeD CLI dari ${DOWNLOAD_URL}"
+    curl -f -sSL "${DOWNLOAD_URL}" -o "${TMP_ARCHIVE}" || {
+      echo "❌ Gagal mengunduh uNmINeD CLI dari ${DOWNLOAD_URL}"
+      rm -f "${TMP_ARCHIVE}"
+      exit 1
+    }
+
+    echo "📦 Mengekstrak uNmINeD CLI ke ${UNMINED_DIR}..."
+    tar -xzf "${TMP_ARCHIVE}" -C "${UNMINED_DIR}" --strip-components=1 2>/dev/null || {
+      tar -xzf "${TMP_ARCHIVE}" -C "${UNMINED_DIR}"
+      FOUND_SUB=$(find "${UNMINED_DIR}" -mindepth 1 -maxdepth 1 -type d -name "unmined-cli*" 2>/dev/null | head -n 1 || true)
+      if [ -n "${FOUND_SUB}" ]; then
+        cp -r "${FOUND_SUB}"/* "${UNMINED_DIR}/" || true
+      fi
+    }
     rm -f "${TMP_ARCHIVE}"
-    exit 1
-  }
-
-  echo "📦 Mengekstrak uNmINeD CLI ke ${UNMINED_DIR}..."
-  tar -xzf "${TMP_ARCHIVE}" -C "${UNMINED_DIR}"
-  rm -f "${TMP_ARCHIVE}"
-  chmod +x "${UNMINED_BIN}" || true
-  echo "✅ uNmINeD CLI berhasil dipasang!"
+  fi
 fi
+
+# Validasi ulang path binary uNmINeD CLI
+if [ ! -f "${UNMINED_BIN}" ]; then
+  FOUND_BIN=$(find "${UNMINED_DIR}" -name "unmined-cli" -type f 2>/dev/null | head -n 1 || true)
+  if [ -n "${FOUND_BIN}" ]; then
+    UNMINED_BIN="${FOUND_BIN}"
+  fi
+fi
+
+if [ ! -f "${UNMINED_BIN}" ]; then
+  echo "❌ Error: File binary unmined-cli tidak ditemukan di ${UNMINED_DIR}!"
+  exit 1
+fi
+
+chmod +x "${UNMINED_BIN}" || true
+echo "✅ uNmINeD CLI siap digunakan di: ${UNMINED_BIN}"
 
 # 3. Buat Folder Output Web Map
 mkdir -p "${OUTPUT_DIR}"
@@ -78,6 +109,9 @@ mkdir -p "${OUTPUT_DIR}"
 # 4. Jalankan Proses Render dengan CPU Prioritas Rendah (nice -n 19)
 echo "🔨 Me-render visual blok dunia Minecraft Bedrock LevelDB..."
 echo "ℹ️  Menggunakan nice -n 19 (background CPU) agar BDS tidak mengalami lag."
+
+EXEC_DIR=$(dirname "${UNMINED_BIN}")
+cd "${EXEC_DIR}"
 
 nice -n 19 "${UNMINED_BIN}" web render \
   --world="${WORLD_DIR}" \
@@ -90,6 +124,8 @@ nice -n 19 "${UNMINED_BIN}" web render \
       --world="${WORLD_DIR}" \
       --output="${OUTPUT_DIR}"
   }
+
+cd "${BOT_DIR}"
 
 # 5. Normalisasi File Index
 if [ -f "${OUTPUT_DIR}/unmined.index.html" ] && [ ! -f "${OUTPUT_DIR}/index.html" ]; then
