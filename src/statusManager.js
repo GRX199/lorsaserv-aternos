@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { ActivityType, EmbedBuilder } = require('discord.js');
+const { ActivityType, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
 const { checkServerStatus } = require('./pinger');
 const { createStatusEmbed, createStatusButtons, createAdminPanelEmbed, createAdminPanelButtons } = require('./embeds');
 const { isServerRunning } = require('./serverController');
@@ -485,7 +485,7 @@ class StatusManager {
   }
 
   /**
-   * Mengupdate presence / activity bot di profil Discord
+   * Mengupdate presence / activity bot di profil Discord dan nama bot di server
    */
   updatePresence() {
     if (!this.client.user) return;
@@ -495,19 +495,71 @@ class StatusManager {
       const vps = servers.find(s => s.id === 'vps') || servers[0];
       const vpsStatus = vps ? this.serverStatuses[vps.id] : null;
 
+      const isOnline = Boolean(vpsStatus && vpsStatus.online);
+      const online = vpsStatus?.players?.online ?? 0;
+      const max = vpsStatus?.players?.max ?? 10;
+
       let presenceText = '';
-      if (vpsStatus && vpsStatus.online) {
-        presenceText = `🟢 ${vpsStatus.players?.online || 0} pemain online`;
+      if (isOnline) {
+        presenceText = (this.config.display?.presenceOnline || '👥 {online}/{max} pemain online')
+          .replace('{online}', online)
+          .replace('{max}', max);
       } else {
-        presenceText = '🔴 Server Offline';
+        presenceText = this.config.display?.presenceOffline || '🔴 Server Offline';
       }
 
+      // Di Discord API, ActivityType.Custom WAJIB menyertakan 'state' agar teks tampil
       this.client.user.setPresence({
-        status: vpsStatus?.online ? 'online' : 'idle',
-        activities: [{ name: presenceText, type: ActivityType.Custom }]
+        status: isOnline ? 'online' : 'idle',
+        activities: [
+          {
+            name: presenceText,
+            state: presenceText,
+            type: ActivityType.Custom
+          }
+        ]
       });
+
+      // Update juga nama / nickname bot di Discord server agar jumlah pemain langsung kelihatan di nama bot
+      this.updateBotNickname(isOnline, online, max).catch(() => {});
     } catch (err) {
       console.warn('[StatusManager] Gagal update presence:', err.message);
+    }
+  }
+
+  /**
+   * Mengupdate nickname bot di server Discord (misal: lorsaserv [0/10])
+   * Hanya memanggil API Discord jika nickname benar-benar berubah untuk menghindari rate limit.
+   */
+  async updateBotNickname(isOnline, online, max) {
+    if (!this.client.guilds) return;
+
+    for (const guild of this.client.guilds.cache.values()) {
+      try {
+        const me = guild.members.me;
+        if (!me) continue;
+        if (guild.ownerId === me.id) continue;
+
+        // Periksa izin ubah nickname bot
+        if (!me.permissions.has(PermissionFlagsBits.ChangeNickname)) continue;
+
+        // Ambil nama dasar bot (tanpa akhiran [x/y] atau [Offline] sebelumnya)
+        let baseName = this.config.botName || me.user.username || 'lorsaserv';
+        if (me.nickname) {
+          const cleaned = me.nickname.replace(/\s*\[.*\]\s*$/, '').trim();
+          if (cleaned) baseName = cleaned;
+        }
+
+        const targetNick = isOnline
+          ? `${baseName} [${online}/${max}]`
+          : `${baseName} [Offline]`;
+
+        if (me.nickname !== targetNick) {
+          await me.setNickname(targetNick).catch(() => {});
+        }
+      } catch (err) {
+        // Abaikan error rate limit atau permission di guild tertentu
+      }
     }
   }
 
