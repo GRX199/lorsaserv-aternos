@@ -18,6 +18,20 @@ function getConnectUrl(serverConfig, globalConfig) {
 }
 
 /**
+ * Mendapatkan tautan Web Map Live yang bisa diklik langsung dari Discord
+ * @param {object} globalConfig - Konfigurasi global bot
+ */
+function getMapUrl(globalConfig) {
+  const host = globalConfig?.publicUrl
+    || process.env.PUBLIC_URL
+    || (globalConfig?.publicIp ? `http://${globalConfig.publicIp}:${process.env.PORT || 3000}` : null)
+    || `http://129.226.95.58:${process.env.PORT || 3000}`;
+
+  const cleanHost = host.replace(/\/+$/, '');
+  return `${cleanHost}/map`;
+}
+
+/**
  * Membuat Embed status panel yang rapi dan menarik untuk server tertentu
  * @param {object} status - Data status dari checkServerStatus()
  * @param {object} serverConfig - Konfigurasi spesifik server { id, name, ip, port, type, isLocal, icon }
@@ -182,7 +196,16 @@ function createStatusButtons(serverConfig, isOnline = true, globalConfig = null)
       .setStyle(ButtonStyle.Secondary)
   );
 
-  return [row1, row2];
+  // Baris 3: Tautan Web Map Dunia Real-Time
+  const row3 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setLabel('Buka Web Map Live')
+      .setEmoji('🗺️')
+      .setStyle(ButtonStyle.Link)
+      .setURL(getMapUrl(globalConfig))
+  );
+
+  return [row1, row2, row3];
 }
 
 /**
@@ -234,7 +257,7 @@ function createAdminPanelEmbed(serverConfig, status, globalConfig) {
 /**
  * Membuat Action Rows Tombol untuk Admin Control Panel
  */
-function createAdminPanelButtons(isOnline = true) {
+function createAdminPanelButtons(isOnline = true, globalConfig = null) {
   // Baris 1: Kontrol Daya Server
   const rowPower = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -291,7 +314,12 @@ function createAdminPanelButtons(isOnline = true) {
       .setCustomId('btn_admin_clearlag')
       .setLabel('Bersihkan Lag')
       .setEmoji('🧹')
-      .setStyle(ButtonStyle.Secondary)
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setLabel('Web Map')
+      .setEmoji('🗺️')
+      .setStyle(ButtonStyle.Link)
+      .setURL(getMapUrl(globalConfig))
   );
 
   return [rowPower, rowInspect, rowUtil];
@@ -302,6 +330,7 @@ module.exports = {
   createStatusButtons,
   createAdminPanelEmbed,
   createAdminPanelButtons,
-  getConnectUrl
+  getConnectUrl,
+  getMapUrl
 };
 

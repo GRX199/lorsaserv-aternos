@@ -98,7 +98,7 @@ async function registerSlashCommands() {
 
 // 5. Jalankan Web Health Server (Sangat penting untuk Render agar tidak crash / sleep & link connect)
 const port = process.env.PORT || 3000;
-startHealthServer(port, () => statusManager?.getLatestStatus(), config);
+startHealthServer(port, () => statusManager?.getLatestStatus(), config, () => statusManager);
 
 async function initServerConfig(cfg) {
   let publicIp = null;

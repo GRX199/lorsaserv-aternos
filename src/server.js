@@ -1,12 +1,14 @@
 const http = require('node:http');
+const { renderWebMapPage } = require('./webMapHtml');
 
 /**
  * Membuat HTTP Server ringan untuk Web Service (Render healthcheck & link langsung koneksi Minecraft)
  * @param {number} port - Port yang digunakan
  * @param {function} getStatusCallback - Callback untuk mengambil status server Minecraft saat ini
  * @param {object} config - Objek konfigurasi config.json
+ * @param {function} getStatusManagerCallback - Callback untuk mengambil instance StatusManager
  */
-function startHealthServer(port = 3000, getStatusCallback, config) {
+function startHealthServer(port = 3000, getStatusCallback, config, getStatusManagerCallback) {
   const server = http.createServer((req, res) => {
     let parsedUrl;
     try {
@@ -36,6 +38,104 @@ function startHealthServer(port = 3000, getStatusCallback, config) {
           players: currentStatus.players
         } : 'Initializing...'
       }, null, 2));
+      return;
+    }
+
+    // 1.5. Endpoint API Data Peta (Koordinat Pemain & Server Status)
+    if (pathname === '/api/map-data') {
+      const fs = require('node:fs');
+      const path = require('node:path');
+      const { getSkinUrls } = require('./skinHelper');
+
+      const sm = typeof getStatusManagerCallback === 'function' ? getStatusManagerCallback() : null;
+      const currentStatus = typeof getStatusCallback === 'function' ? getStatusCallback() : null;
+
+      const onlineNames = sm?.playerLogMonitor ? sm.playerLogMonitor.getOnlinePlayers() : [];
+      const offlineFile = path.join(__dirname, '..', 'data', 'offline_players.json');
+
+      let savedData = {};
+      if (fs.existsSync(offlineFile)) {
+        try {
+          savedData = JSON.parse(fs.readFileSync(offlineFile, 'utf8'));
+        } catch {}
+      }
+
+      const players = [];
+      const seen = new Set();
+
+      for (const [key, p] of Object.entries(savedData)) {
+        if (!p || !p.name) continue;
+        const isOnline = onlineNames.some(n => n.toLowerCase() === p.name.toLowerCase());
+        const skin = getSkinUrls(p.name);
+        players.push({
+          name: p.name,
+          isOnline,
+          x: p.x ?? 0,
+          y: p.y ?? 64,
+          z: p.z ?? 0,
+          dimension: p.dimension || 'overworld',
+          health: p.health ?? 20,
+          maxHealth: p.maxHealth ?? 20,
+          level: p.level ?? 0,
+          armor: p.armor || {},
+          avatarUrl: skin.headUrl,
+          bodyUrl: skin.bodyUrl,
+          updatedAt: p.updatedAt || Date.now()
+        });
+        seen.add(p.name.toLowerCase());
+      }
+
+      for (const name of onlineNames) {
+        if (!seen.has(name.toLowerCase())) {
+          const skin = getSkinUrls(name);
+          players.push({
+            name,
+            isOnline: true,
+            x: 0,
+            y: 64,
+            z: 0,
+            dimension: 'overworld',
+            health: 20,
+            maxHealth: 20,
+            level: 0,
+            armor: {},
+            avatarUrl: skin.headUrl,
+            bodyUrl: skin.bodyUrl,
+            updatedAt: Date.now()
+          });
+        }
+      }
+
+      const vps = (config?.servers && config.servers.find(s => s.id === 'vps')) || config?.mcserver || {};
+      const ip = (vps.ip && vps.ip !== 'auto') ? vps.ip : (config?.publicIp || '129.226.95.58');
+
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      });
+      res.end(JSON.stringify({
+        server: {
+          name: vps.name || 'SASY199 Minecraft Bedrock Server',
+          online: Boolean(currentStatus?.online),
+          ip: ip,
+          port: vps.port || 19132,
+          version: currentStatus?.version || 'Bedrock 1.26.51',
+          playersOnline: onlineNames.length || currentStatus?.players?.online || 0,
+          playersMax: currentStatus?.players?.max || 10
+        },
+        players
+      }));
+      return;
+    }
+
+    // 1.8. Endpoint Halaman Web Map Live Interaktif (/map atau /livemap)
+    if (pathname === '/map' || pathname === '/livemap' || pathname === '/webmap') {
+      const vps = (config?.servers && config.servers.find(s => s.id === 'vps')) || config?.mcserver || {};
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      });
+      res.end(renderWebMapPage(vps, config));
       return;
     }
 

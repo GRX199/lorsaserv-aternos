@@ -461,7 +461,7 @@ class StatusManager {
               const vpsServer = servers.find(s => s.id === 'vps') || servers[0];
               const vpsStatus = this.serverStatuses[vpsServer.id] || { online: false };
               const adminEmbed = createAdminPanelEmbed(vpsServer, vpsStatus, this.config);
-              const adminButtons = createAdminPanelButtons(Boolean(vpsStatus.online));
+              const adminButtons = createAdminPanelButtons(Boolean(vpsStatus.online), this.config);
 
               await adminMsg.edit({
                 embeds: [adminEmbed],
@@ -508,14 +508,13 @@ class StatusManager {
         presenceText = this.config.display?.presenceOffline || '🔴 Server Offline';
       }
 
-      // Di Discord API, ActivityType.Custom WAJIB menyertakan 'state' agar teks tampil
+      // Gunakan ActivityType.Watching agar muncul konsisten di profil & member list semua device Discord
       this.client.user.setPresence({
         status: isOnline ? 'online' : 'idle',
         activities: [
           {
             name: presenceText,
-            state: presenceText,
-            type: ActivityType.Custom
+            type: ActivityType.Watching
           }
         ]
       });
@@ -536,17 +535,14 @@ class StatusManager {
 
     for (const guild of this.client.guilds.cache.values()) {
       try {
-        const me = guild.members.me;
+        const me = guild.members.me || await guild.members.fetchMe().catch(() => null);
         if (!me) continue;
         if (guild.ownerId === me.id) continue;
 
-        // Periksa izin ubah nickname bot
-        if (!me.permissions.has(PermissionFlagsBits.ChangeNickname)) continue;
-
         // Ambil nama dasar bot (tanpa akhiran [x/y] atau [Offline] sebelumnya)
-        let baseName = this.config.botName || me.user.username || 'lorsaserv';
+        let baseName = this.config.botName || me.user?.username || 'lorsaserv';
         if (me.nickname) {
-          const cleaned = me.nickname.replace(/\s*\[.*\]\s*$/, '').trim();
+          const cleaned = me.nickname.replace(/\s*\[.*?\]\s*$/, '').trim();
           if (cleaned) baseName = cleaned;
         }
 
@@ -555,10 +551,12 @@ class StatusManager {
           : `${baseName} [Offline]`;
 
         if (me.nickname !== targetNick) {
-          await me.setNickname(targetNick).catch(() => {});
+          await me.setNickname(targetNick).catch((err) => {
+            console.warn(`[StatusManager] Gagal set nickname bot di ${guild.name}:`, err.message);
+          });
         }
       } catch (err) {
-        // Abaikan error rate limit atau permission di guild tertentu
+        // Abaikan error di guild tertentu
       }
     }
   }

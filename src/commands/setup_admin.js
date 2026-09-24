@@ -51,7 +51,7 @@ module.exports = {
       const status = await statusManager.getStatusForServer(vpsServer);
 
       const embed = createAdminPanelEmbed(vpsServer, status, config);
-      const buttons = createAdminPanelButtons(Boolean(status?.online));
+      const buttons = createAdminPanelButtons(Boolean(status?.online), config);
 
       // Hapus pesan panel admin lama jika ada di channel yang sama
       if (statusManager.state?.adminMessageId && statusManager.state?.adminChannelId === targetChannel.id) {
