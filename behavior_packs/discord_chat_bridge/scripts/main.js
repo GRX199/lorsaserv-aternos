@@ -1,4 +1,7 @@
-import { world, system, EquipmentSlot } from "@minecraft/server";
+import * as mc from "@minecraft/server";
+const world = mc.world;
+const system = mc.system;
+const EquipmentSlot = mc.EquipmentSlot || {};
 
 console.warn("[Scripting] Discord Chat Bridge loaded successfully!");
 console.info("[Scripting] Discord Chat Bridge loaded successfully!");

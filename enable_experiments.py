@@ -33,6 +33,7 @@ def enable_experiments_for_file(level_dat_path):
             level['experiments'] = Compound()
 
         level['experiments']['gametest'] = Byte(1)
+        level['experiments']['beta_apis'] = Byte(1)
         level['experiments']['experiments_ever_used'] = Byte(1)
         level['experiments']['saved_with_toggled_experiments'] = Byte(1)
 

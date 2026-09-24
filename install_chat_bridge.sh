@@ -50,8 +50,12 @@ if [ -f "$PROP_FILE" ]; then
   echo "✅ server.properties berhasil dikonfigurasi: content-log-console-output-enabled=true"
 fi
 
-# 2. Aktifkan Beta APIs / GameTest di level.dat agar script chatSend dapat berjalan
-echo "[2/5] Memeriksa & mengaktifkan Beta APIs di level.dat..."
+# 2. Hentikan service minecraft-bedrock sementara agar penulisan level.dat tidak tertimpa cache server
+echo "[2/5] Menghentikan service minecraft-bedrock sementara..."
+sudo systemctl stop minecraft-bedrock 2>/dev/null || true
+
+# 2.5. Aktifkan Beta APIs / GameTest di level.dat agar script chatSend dapat berjalan
+echo "Memeriksa & mengaktifkan Beta APIs di level.dat..."
 if command -v python3 &> /dev/null; then
   if ! python3 -c "import nbtlib" &>/dev/null; then
     echo "Mengunduh modul nbtlib..."
