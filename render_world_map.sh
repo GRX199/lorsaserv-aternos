@@ -116,13 +116,17 @@ cd "${EXEC_DIR}"
 nice -n 19 "${UNMINED_BIN}" web render \
   --world="${WORLD_DIR}" \
   --output="${OUTPUT_DIR}" \
-  --shadows=true \
-  --blockrender=true || {
-    # Jika gagal dengan opsi tambahan, jalankan render standar
+  --imageformat=png \
+  -c \
+  --players \
+  --shadows=true || {
+    # Jika gagal dengan opsi bayangan, jalankan render standar dengan PNG
     echo "⚠️  Mencoba fallback perintah render standar..."
     nice -n 19 "${UNMINED_BIN}" web render \
       --world="${WORLD_DIR}" \
-      --output="${OUTPUT_DIR}"
+      --output="${OUTPUT_DIR}" \
+      --imageformat=png \
+      -c
   }
 
 cd "${BOT_DIR}"
