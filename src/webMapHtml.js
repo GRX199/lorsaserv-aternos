@@ -376,6 +376,7 @@ function renderWebMapPage(serverConfig, globalConfig) {
 
     <!-- QUICK ACTIONS -->
     <div class="top-actions">
+      <a href="/world-map" class="btn-action" style="background:#0ea5e9; color:#fff;" title="Buka tampilan visual blok dunia asli (uNmINeD)">🌍 Visual Dunia</a>
       <button class="btn-action" onclick="toggleSidebar()">👥 Pemain</button>
       <a href="/connect" class="btn-action" style="background:#2ecc71; color:#000;">🎮 Main</a>
     </div>

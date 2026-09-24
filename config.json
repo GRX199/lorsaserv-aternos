@@ -67,6 +67,6 @@
     "onlineChannelName": "🟢・{online}/{max}-online",
     "offlineChannelName": "🔴・offline",
     "presenceOnline": "👥 {online}/{max} pemain online",
-    "presenceOffline": "🔴 Server Offline"
+    "presenceOffline": "👥 0/{max} pemain (Offline)"
   }
 }

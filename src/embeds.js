@@ -18,7 +18,7 @@ function getConnectUrl(serverConfig, globalConfig) {
 }
 
 /**
- * Mendapatkan tautan Web Map Live yang bisa diklik langsung dari Discord
+ * Mendapatkan tautan Web Map Live yang bisa diklik langsung dari Discord (Radar Live)
  * @param {object} globalConfig - Konfigurasi global bot
  */
 function getMapUrl(globalConfig) {
@@ -29,6 +29,20 @@ function getMapUrl(globalConfig) {
 
   const cleanHost = host.replace(/\/+$/, '');
   return `${cleanHost}/map`;
+}
+
+/**
+ * Mendapatkan tautan Web Map Visual Blok Dunia Asli (uNmINeD Renderer)
+ * @param {object} globalConfig - Konfigurasi global bot
+ */
+function getWorldMapUrl(globalConfig) {
+  const host = globalConfig?.publicUrl
+    || process.env.PUBLIC_URL
+    || (globalConfig?.publicIp ? `http://${globalConfig.publicIp}:${process.env.PORT || 3000}` : null)
+    || `http://129.226.95.58:${process.env.PORT || 3000}`;
+
+  const cleanHost = host.replace(/\/+$/, '');
+  return `${cleanHost}/world-map`;
 }
 
 /**
@@ -196,11 +210,16 @@ function createStatusButtons(serverConfig, isOnline = true, globalConfig = null)
       .setStyle(ButtonStyle.Secondary)
   );
 
-  // Baris 3: Tautan Web Map Dunia Real-Time
+  // Baris 3: Tautan Web Map Dunia Real-Time & Visual Asli
   const row3 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setLabel('Buka Web Map Live')
-      .setEmoji('🗺️')
+      .setLabel('Visual Dunia Asli')
+      .setEmoji('🌍')
+      .setStyle(ButtonStyle.Link)
+      .setURL(getWorldMapUrl(globalConfig)),
+    new ButtonBuilder()
+      .setLabel('Radar Pemain Live')
+      .setEmoji('📡')
       .setStyle(ButtonStyle.Link)
       .setURL(getMapUrl(globalConfig))
   );
@@ -306,6 +325,11 @@ function createAdminPanelButtons(isOnline = true, globalConfig = null) {
       .setEmoji('📥')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
+      .setCustomId('btn_admin_rendermap')
+      .setLabel('Render Map')
+      .setEmoji('🌍')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
       .setCustomId('btn_admin_cmd')
       .setLabel('Konsol CMD')
       .setEmoji('⚡')
@@ -319,7 +343,7 @@ function createAdminPanelButtons(isOnline = true, globalConfig = null) {
       .setLabel('Web Map')
       .setEmoji('🗺️')
       .setStyle(ButtonStyle.Link)
-      .setURL(getMapUrl(globalConfig))
+      .setURL(getWorldMapUrl(globalConfig))
   );
 
   return [rowPower, rowInspect, rowUtil];
@@ -331,6 +355,7 @@ module.exports = {
   createAdminPanelEmbed,
   createAdminPanelButtons,
   getConnectUrl,
-  getMapUrl
+  getMapUrl,
+  getWorldMapUrl
 };
 

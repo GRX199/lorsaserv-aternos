@@ -167,7 +167,7 @@ client.on('interactionCreate', async (interaction) => {
       const adminOnlyCommands = [
         'cmd', 'op', 'deop', 'stop-server', 'restart-server',
         'setup-status', 'setup-logs', 'setup-chat', 'setup-admin',
-        'inventory', 'locate', 'download-backup'
+        'inventory', 'locate', 'download-backup', 'sync-name', 'render-map'
       ];
 
       if (adminOnlyCommands.includes(interaction.commandName)) {
@@ -493,6 +493,15 @@ client.on('interactionCreate', async (interaction) => {
               ? '🧹 **Clear Lag Berhasil!** Seluruh sampah & item tercecer di tanah telah dibersihkan.'
               : `⚠️ Gagal membersihkan item: ${res.error || res.message}`
           });
+          return;
+        }
+
+        // 🌍 Render Visual Map Dunia (uNmINeD)
+        if (interaction.customId === 'btn_admin_rendermap') {
+          const renderCmd = client.commands.get('render-map');
+          if (renderCmd) {
+            await renderCmd.execute(interaction, { config, statusManager, client });
+          }
           return;
         }
       }

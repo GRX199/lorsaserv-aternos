@@ -505,7 +505,9 @@ class StatusManager {
           .replace('{online}', online)
           .replace('{max}', max);
       } else {
-        presenceText = this.config.display?.presenceOffline || '🔴 Server Offline';
+        presenceText = (this.config.display?.presenceOffline || '👥 0/{max} pemain (Offline)')
+          .replace('{online}', 0)
+          .replace('{max}', max);
       }
 
       // Gunakan ActivityType.Watching agar muncul konsisten di profil & member list semua device Discord
@@ -539,6 +541,15 @@ class StatusManager {
         if (!me) continue;
         if (guild.ownerId === me.id) continue;
 
+        // Periksa apakah bot memiliki izin untuk mengubah nama panggilannya sendiri
+        const canChangeNick = me.permissions.has(PermissionFlagsBits.ChangeNickname)
+          || me.permissions.has(PermissionFlagsBits.Administrator);
+
+        if (!canChangeNick) {
+          console.warn(`[StatusManager] ⚠️ Bot tidak memiliki izin "Change Nickname" (Ubah Nama Panggilan) di server Discord "${guild.name}". Aktifkan izin ini pada role bot di Server Settings -> Roles.`);
+          continue;
+        }
+
         // Ambil nama dasar bot (tanpa akhiran [x/y] atau [Offline] sebelumnya)
         let baseName = this.config.botName || me.user?.username || 'lorsaserv';
         if (me.nickname) {
@@ -546,9 +557,8 @@ class StatusManager {
           if (cleaned) baseName = cleaned;
         }
 
-        const targetNick = isOnline
-          ? `${baseName} [${online}/${max}]`
-          : `${baseName} [Offline]`;
+        const count = isOnline ? online : 0;
+        const targetNick = `${baseName} [${count}/${max}]`;
 
         if (me.nickname !== targetNick) {
           await me.setNickname(targetNick).catch((err) => {
@@ -633,6 +643,9 @@ class StatusManager {
         console.warn('[StatusManager] Gagal memulai AutoRestart:', err.message);
       }
     }
+
+    // Set presence & nickname segera saat start
+    this.updatePresence();
 
     this.updateStatusEmbed();
     this.updatePlayerCountChannel();
