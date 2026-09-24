@@ -290,6 +290,13 @@ class PlayerLogMonitor {
 
       // Gamertag Xbox / Minecraft Bedrock dapat memiliki spasi dan panjang hingga 24 karakter
       if (playerName && playerName.length > 0 && playerName.length <= 24 && !playerName.includes('INFO') && !playerName.includes('WARN')) {
+        const now = Date.now();
+        if (this.lastJoinPlayer === playerName && (now - (this.lastJoinTime || 0)) < 3000) {
+          return;
+        }
+        this.lastJoinPlayer = playerName;
+        this.lastJoinTime = now;
+
         if (!this.onlinePlayers.has(playerName)) {
           console.log(`[PlayerLogMonitor] 🟢 Player Join Terdeteksi: ${playerName}`);
           this.onlinePlayers.add(playerName);
@@ -315,6 +322,13 @@ class PlayerLogMonitor {
       playerName = playerName.replace(/^["']|["']$/g, '').trim();
 
       if (playerName && playerName.length > 0 && playerName.length <= 24 && !playerName.includes('INFO') && !playerName.includes('WARN')) {
+        const now = Date.now();
+        if (this.lastLeavePlayer === playerName && (now - (this.lastLeaveTime || 0)) < 3000) {
+          return;
+        }
+        this.lastLeavePlayer = playerName;
+        this.lastLeaveTime = now;
+
         console.log(`[PlayerLogMonitor] 🔴 Player Leave Terdeteksi: ${playerName}`);
         this.onlinePlayers.delete(playerName);
         this.notifyPlayerChange('leave', playerName);

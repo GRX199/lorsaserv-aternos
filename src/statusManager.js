@@ -393,19 +393,18 @@ class StatusManager {
         }
         this.previousOnlineStates[s.id] = status.online;
 
-        // 1.5. Fail-safe: Deteksi pertambahan pemain lewat UDP ping jika log monitor terlewat
-        const prevCount = this.previousPlayerCounts[s.id] ?? 0;
-        const currentCount = status.players?.online ?? 0;
-        if (status.online && currentCount > prevCount) {
-          const diff = currentCount - prevCount;
-          console.log(`[StatusManager] UDP Ping mendeteksi ${diff} pemain baru bergabung ke ${s.name}!`);
-          if (this.playerLogMonitor && this.playerLogMonitor.onlinePlayers.size === 0) {
+        // 1.5. Fail-safe: Hanya gunakan deteksi UDP ping jika TIDAK ADA log monitor aktif (misal server Aternos / remote)
+        const isMonitoredByLog = (s.isLocal || s.id === 'vps') && this.playerLogMonitor;
+        if (!isMonitoredByLog) {
+          const prevCount = this.previousPlayerCounts[s.id] ?? 0;
+          const currentCount = status.players?.online ?? 0;
+          if (status.online && currentCount > prevCount) {
+            const diff = currentCount - prevCount;
+            console.log(`[StatusManager] UDP Ping mendeteksi ${diff} pemain baru bergabung ke ${s.name}!`);
             await this.sendPlayerNotification('join', 'Pemain (Bedrock)', s, currentCount);
-          }
-        } else if (status.online && currentCount < prevCount) {
-          const diff = prevCount - currentCount;
-          console.log(`[StatusManager] UDP Ping mendeteksi ${diff} pemain keluar dari ${s.name}!`);
-          if (this.playerLogMonitor && this.playerLogMonitor.onlinePlayers.size === 0) {
+          } else if (status.online && currentCount < prevCount) {
+            const diff = prevCount - currentCount;
+            console.log(`[StatusManager] UDP Ping mendeteksi ${diff} pemain keluar dari ${s.name}!`);
             await this.sendPlayerNotification('leave', 'Pemain (Bedrock)', s, currentCount);
           }
         }
