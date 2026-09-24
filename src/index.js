@@ -159,8 +159,8 @@ client.on('interactionCreate', async (interaction) => {
   try {
     // A. Interaksi Slash Command
     if (interaction.isChatInputCommand()) {
-      // Perintah berbahaya yang dikunci khusus untuk Admin
-      const adminOnlyCommands = ['cmd', 'op', 'deop', 'stop-server', 'restart-server', 'setup-status', 'setup-logs', 'setup-chat'];
+      // Perintah berbahaya / sensitif yang dikunci khusus untuk Admin
+      const adminOnlyCommands = ['cmd', 'op', 'deop', 'stop-server', 'restart-server', 'setup-status', 'setup-logs', 'setup-chat', 'inventory'];
 
       if (adminOnlyCommands.includes(interaction.commandName)) {
         const isOwner = interaction.guild?.ownerId === interaction.user.id;

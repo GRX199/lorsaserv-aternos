@@ -17,6 +17,7 @@ class PlayerLogMonitor {
     this.useSudo = false;
     this.logBuffer = [];
     this.flushTimer = null;
+    this.inventoryCallbacks = new Map();
   }
 
   /**
@@ -194,6 +195,24 @@ class PlayerLogMonitor {
   handleLogLine(line) {
     if (!line) return;
 
+    // 0. Deteksi Respon Inventory dari Script Engine BDS: [INV_RES] {...}
+    if (line.includes('[INV_RES]')) {
+      const idx = line.indexOf('[INV_RES]');
+      let jsonStr = line.substring(idx + 9).trim();
+      const startJson = jsonStr.indexOf('{');
+      const endJson = jsonStr.lastIndexOf('}');
+      if (startJson !== -1 && endJson !== -1) {
+        jsonStr = jsonStr.substring(startJson, endJson + 1);
+      }
+      try {
+        const data = JSON.parse(jsonStr);
+        this.handleInventoryResponse(data);
+      } catch (err) {
+        console.warn('[PlayerLogMonitor] Gagal parse [INV_RES]:', err.message);
+      }
+      return;
+    }
+
     // 1. Teruskan baris log ke buffer streaming Discord channel
     this.forwardLogToChannel(line);
 
@@ -221,6 +240,18 @@ class PlayerLogMonitor {
         this.forwardInGameChatToDiscord(sender, text);
         return;
       }
+    }
+
+    // 1.8. Deteksi Player Death (Bedrock Behavior Pack)
+    // Format Bedrock BDS: [Scripting] [DEATH] <Steve> cause:fall killer:Zombie
+    const deathMatch = line.match(/\[DEATH\]\s*<([^>]+)>\s*cause:([^\s]+)(?:\s*killer:(.*))?/i);
+    if (deathMatch) {
+      const victim = deathMatch[1].trim();
+      const cause = deathMatch[2].trim();
+      const killer = (deathMatch[3] || '').trim();
+      console.log(`[PlayerLogMonitor] 💀 Player Death Terdeteksi: ${victim} (Penyebab: ${cause}, Killer: ${killer || 'none'})`);
+      this.forwardDeathFeedToDiscord(victim, cause, killer);
+      return;
     }
 
     // 2. Deteksi Player Connected / Join
@@ -372,6 +403,83 @@ class PlayerLogMonitor {
       }
     } catch (err) {
       console.warn('[PlayerLogMonitor] Gagal meneruskan chat in-game ke Discord:', err.message);
+    }
+  }
+
+  /**
+   * Mengirimkan notifikasi kematian pemain (Death Feed) ke Discord
+   */
+  async forwardDeathFeedToDiscord(victim, cause, killer) {
+    if (!this.statusManager?.client) return;
+
+    const channelId = this.statusManager?.getChatBridgeChannelId()
+      || this.config.chatBridgeChannelId
+      || this.config.notifications?.chatBridge?.channelId
+      || process.env.CHAT_BRIDGE_CHANNEL_ID;
+
+    let targetChannel = null;
+    if (channelId) {
+      targetChannel = await this.statusManager.client.channels.fetch(channelId).catch(() => null);
+    } else {
+      for (const guild of this.statusManager.client.guilds.cache.values()) {
+        const found = guild.channels.cache.find(c =>
+          c.isTextBased() && (c.name === 'chat-minecraft' || c.name === 'minecraft-chat')
+        );
+        if (found) {
+          targetChannel = found;
+          break;
+        }
+      }
+    }
+
+    if (!targetChannel || !targetChannel.isTextBased()) return;
+
+    // Terjemahkan penyebab kematian ke bahasa Indonesia
+    let deathMessage = '';
+    const cleanCause = (cause || '').toLowerCase();
+    const cleanKiller = killer ? killer.replace(/_/g, ' ') : '';
+
+    if (cleanCause === 'fall') {
+      deathMessage = 'terpeleset dan jatuh dari tempat tinggi!';
+    } else if (cleanCause === 'lava') {
+      deathMessage = 'berenang di dalam kolam lahar panas!';
+    } else if (cleanCause === 'drowning') {
+      deathMessage = 'kehabisan nafas dan tenggelam di air!';
+    } else if (cleanCause === 'entityattack' || cleanCause === 'entity_attack') {
+      deathMessage = cleanKiller
+        ? `gugur setelah diserang oleh **${cleanKiller}**!`
+        : 'tewas diserang oleh monster!';
+    } else if (cleanCause === 'projectile') {
+      deathMessage = cleanKiller
+        ? `ditembak jatuh oleh **${cleanKiller}**!`
+        : 'tewas tertembak anak panah!';
+    } else if (cleanCause === 'explosion') {
+      deathMessage = 'hancur lebur terkena ledakan dahsyat!';
+    } else if (cleanCause === 'fire' || cleanCause === 'fire_tick') {
+      deathMessage = 'hangus terbakar api!';
+    } else if (cleanCause === 'magic') {
+      deathMessage = 'tewas terkena efek racun / sihir!';
+    } else if (cleanCause === 'starve') {
+      deathMessage = 'mati kelaparan karena kehabisan perbekalan!';
+    } else if (cleanCause === 'suffocation') {
+      deathMessage = 'terkubur hidup-hidup di dalam dinding blok!';
+    } else if (cleanCause === 'void') {
+      deathMessage = 'terperosok jatuh ke dalam jurang kehampaan (*The Void*)!';
+    } else {
+      deathMessage = `telah tewas (${cause || 'alasan tidak diketahui'})`;
+    }
+
+    try {
+      const { EmbedBuilder } = require('discord.js');
+      const embed = new EmbedBuilder()
+        .setColor(0x992d22)
+        .setDescription(`💀 **${victim}** ${deathMessage}`)
+        .setThumbnail(`https://mc-heads.net/avatar/${encodeURIComponent(victim)}/64`)
+        .setTimestamp();
+
+      await targetChannel.send({ embeds: [embed] }).catch(() => {});
+    } catch (err) {
+      console.warn('[PlayerLogMonitor] Gagal kirim death feed ke Discord:', err.message);
     }
   }
 
@@ -553,6 +661,77 @@ class PlayerLogMonitor {
       console.log(`[PlayerLogMonitor] Berhasil mengirim konfirmasi ke channel log ${channelId}`);
     } catch (err) {
       console.warn('[PlayerLogMonitor] Error sendStartupLogMessage:', err.message);
+    }
+  }
+
+  /**
+   * Mengirim scriptevent bot:inv <targetName> ke konsol server BDS
+   * dan menunggu respon JSON [INV_RES]
+   */
+  async queryPlayerInventory(playerName, timeoutMs = 6000) {
+    const { sendConsoleCommand } = require('./serverController');
+    const target = playerName.trim();
+    const key = target.toLowerCase();
+
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        if (this.inventoryCallbacks.has(key)) {
+          this.inventoryCallbacks.delete(key);
+          resolve({
+            error: `Waktu habis (timeout ${Math.round(timeoutMs / 1000)}s) menunggu respon dari server.\nPastikan server Minecraft aktif, behavior pack terpasang, dan pemain **${target}** sedang berada di dalam server.`
+          });
+        }
+      }, timeoutMs);
+
+      this.inventoryCallbacks.set(key, (data) => {
+        clearTimeout(timer);
+        resolve(data);
+      });
+
+      const cmdResult = sendConsoleCommand(`scriptevent bot:inv ${target}`);
+      if (!cmdResult.success) {
+        clearTimeout(timer);
+        this.inventoryCallbacks.delete(key);
+        resolve({
+          error: `Gagal mengirim perintah ke konsol server: ${cmdResult.error || cmdResult.message || 'Server offline atau screen tidak ditemukan'}.`
+        });
+      }
+    });
+  }
+
+  /**
+   * Memproses respon [INV_RES] dari script engine Bedrock
+   */
+  handleInventoryResponse(data) {
+    if (!data) return;
+
+    // 1. Cocokkan berdasarkan nama pemain
+    if (data.name) {
+      const key = data.name.toLowerCase();
+      const cb = this.inventoryCallbacks.get(key);
+      if (cb) {
+        this.inventoryCallbacks.delete(key);
+        cb(data);
+        return;
+      }
+    }
+
+    // 2. Cocokkan jika respon memuat error dengan nama pemain
+    if (data.error) {
+      for (const [key, cb] of this.inventoryCallbacks.entries()) {
+        if (data.error.toLowerCase().includes(key)) {
+          this.inventoryCallbacks.delete(key);
+          cb(data);
+          return;
+        }
+      }
+    }
+
+    // 3. Fallback jika hanya ada 1 query yang sedang menunggu
+    if (this.inventoryCallbacks.size === 1) {
+      const [key, cb] = this.inventoryCallbacks.entries().next().value;
+      this.inventoryCallbacks.delete(key);
+      cb(data);
     }
   }
 }

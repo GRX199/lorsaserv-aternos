@@ -179,7 +179,12 @@ function sendConsoleCommand(cmd) {
     return { success: false, message: 'Hanya bekerja di Linux' };
   }
 
-  const screen = getActiveScreenSession() || 'mc-paper';
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const homeDir = process.env.HOME || '/home/ubuntu';
+  const isBedrock = fs.existsSync(path.join(homeDir, 'bedrock-server'));
+  const fallbackScreen = isBedrock ? 'mc-bedrock' : 'mc-paper';
+  const screen = getActiveScreenSession() || fallbackScreen;
   let cleanCmd = cmd.trim();
   if (cleanCmd.startsWith('/')) {
     cleanCmd = cleanCmd.substring(1).trim();
