@@ -16,7 +16,7 @@ if [ ! -d "$BEDROCK_DIR" ]; then
 fi
 
 # 1. Pastikan config/default/permissions.json mengizinkan Script API module
-echo "[1/4] Menyiapkan izin module scripting di config/default/permissions.json..."
+echo "[1/5] Menyiapkan izin module scripting di config/default/permissions.json..."
 mkdir -p "$BEDROCK_DIR/config/default"
 cat <<EOF > "$BEDROCK_DIR/config/default/permissions.json"
 {
@@ -31,8 +31,27 @@ cat <<EOF > "$BEDROCK_DIR/config/default/permissions.json"
 EOF
 echo "✅ permissions.json berhasil dikonfigurasi."
 
+# 1.5. Pastikan server.properties mengaktifkan content-log console output agar console.warn/log muncul di log terminal
+PROP_FILE="$BEDROCK_DIR/server.properties"
+if [ -f "$PROP_FILE" ]; then
+  echo "Mengaktifkan content-log di server.properties..."
+  for key in content-log-console-output-enabled content-log-file-enabled; do
+    if grep -q "^$key=" "$PROP_FILE"; then
+      sed -i "s/^$key=.*/$key=true/" "$PROP_FILE"
+    else
+      echo "$key=true" >> "$PROP_FILE"
+    fi
+  done
+  if grep -q "^content-log-level=" "$PROP_FILE"; then
+    sed -i "s/^content-log-level=.*/content-log-level=verbose/" "$PROP_FILE"
+  else
+    echo "content-log-level=verbose" >> "$PROP_FILE"
+  fi
+  echo "✅ server.properties berhasil dikonfigurasi: content-log-console-output-enabled=true"
+fi
+
 # 2. Aktifkan Beta APIs / GameTest di level.dat agar script chatSend dapat berjalan
-echo "[2/4] Memeriksa & mengaktifkan Beta APIs di level.dat..."
+echo "[2/5] Memeriksa & mengaktifkan Beta APIs di level.dat..."
 if command -v python3 &> /dev/null; then
   if ! python3 -c "import nbtlib" &>/dev/null; then
     echo "Mengunduh modul nbtlib..."
@@ -44,9 +63,11 @@ else
 fi
 
 # 3. Salin file manifest.json & scripts/main.js
-echo "[3/4] Menyalin Behavior Pack discord_chat_bridge..."
+echo "[3/5] Menyalin Behavior Pack discord_chat_bridge..."
 mkdir -p "$BP_DIR/scripts"
-cp -r "$SCRIPT_DIR/behavior_packs/discord_chat_bridge/"* "$BP_DIR/"
+cp -rf "$SCRIPT_DIR/behavior_packs/discord_chat_bridge/"* "$BP_DIR/"
+cp -f "$SCRIPT_DIR/behavior_packs/discord_chat_bridge/scripts/main.js" "$BP_DIR/scripts/main.js"
+touch "$BP_DIR/scripts/main.js"
 echo "✅ Behavior pack discord_chat_bridge berhasil disalin ke $BP_DIR"
 
 # 4. Aktifkan pack ke semua world di folder worlds/

@@ -1,8 +1,16 @@
 import { world } from "@minecraft/server";
 
 console.warn("[Scripting] Discord Chat Bridge loaded successfully!");
+console.info("[Scripting] Discord Chat Bridge loaded successfully!");
 
 let chatSubscribed = false;
+
+function broadcastChat(sender, message) {
+  if (!sender || !message) return;
+  // Format standar yang dikenali regex bot: [CHAT] <Nama> Pesan
+  console.warn(`[CHAT] <${sender}> ${message}`);
+  console.info(`[CHAT] <${sender}> ${message}`);
+}
 
 // 1. Coba afterEvents.chatSend
 try {
@@ -11,9 +19,7 @@ try {
       try {
         const sender = event.sender?.name || "Player";
         const message = event.message || "";
-        if (sender && message) {
-          console.warn(`[CHAT] <${sender}> ${message}`);
-        }
+        broadcastChat(sender, message);
       } catch (err) {
         console.warn(`[CHAT_ERROR] ${err.message}`);
       }
@@ -32,9 +38,7 @@ try {
       try {
         const sender = event.sender?.name || "Player";
         const message = event.message || "";
-        if (sender && message) {
-          console.warn(`[CHAT] <${sender}> ${message}`);
-        }
+        broadcastChat(sender, message);
       } catch (err) {
         console.warn(`[CHAT_ERROR] ${err.message}`);
       }

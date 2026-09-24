@@ -209,6 +209,14 @@ class PlayerLogMonitor {
       const text = chatMatch[2].trim();
       // Jangan forward jika pesan dari bot / broadcast Discord untuk mencegah loop echo
       if (sender && text && !text.startsWith('[Discord]')) {
+        const msgKey = `${sender}:${text}`;
+        const now = Date.now();
+        if (this.lastChatMessageKey === msgKey && (now - (this.lastChatMessageTime || 0)) < 1500) {
+          return;
+        }
+        this.lastChatMessageKey = msgKey;
+        this.lastChatMessageTime = now;
+
         console.log(`[PlayerLogMonitor] 💬 In-Game Chat Terdeteksi: <${sender}> ${text}`);
         this.forwardInGameChatToDiscord(sender, text);
         return;
@@ -330,7 +338,12 @@ class PlayerLogMonitor {
       }
     }
 
-    if (!targetChannel || !targetChannel.isTextBased()) return;
+    if (!targetChannel || !targetChannel.isTextBased()) {
+      console.warn('[PlayerLogMonitor] ⚠️ Gagal meneruskan chat: Target Discord channel tidak ditemukan. Gunakan /setup-chat di Discord.');
+      return;
+    }
+
+    console.log(`[PlayerLogMonitor] 📤 Meneruskan chat <${sender}> ke channel Discord: #${targetChannel.name} (${targetChannel.id})`);
 
     try {
       // Coba gunakan Discord Webhook agar muncul nama & kepala skin pemain langsung
