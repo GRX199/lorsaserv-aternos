@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { ActivityType, EmbedBuilder } = require('discord.js');
 const { checkServerStatus } = require('./pinger');
-const { createStatusEmbed, createStatusButtons } = require('./embeds');
+const { createStatusEmbed, createStatusButtons, createAdminPanelEmbed, createAdminPanelButtons } = require('./embeds');
 const { isServerRunning } = require('./serverController');
 const { PlaytimeTracker } = require('./playtimeTracker');
 const { BackupManager } = require('./backupManager');
@@ -243,9 +243,10 @@ class StatusManager {
       .setThumbnail(serverConfig.icon || null)
       .setTimestamp();
 
+    const statusButtons = createStatusButtons(serverConfig, isOnline, this.config);
     const payload = {
       embeds: [embed],
-      components: [createStatusButtons(serverConfig, isOnline, this.config)]
+      components: Array.isArray(statusButtons) ? statusButtons : [statusButtons]
     };
 
     if (alertConfig.mention && alertConfig.mention.trim() !== '') {
@@ -421,17 +422,19 @@ class StatusManager {
             message = await channel.messages.fetch(msgId).catch(() => null);
           }
 
+          const buttonComponents = Array.isArray(buttons) ? buttons : [buttons];
+
           if (message) {
             await message.edit({
               embeds: [embed],
-              components: [buttons]
+              components: buttonComponents
             }).catch((err) => {
               console.warn(`[StatusManager] Gagal edit message untuk ${s.name}:`, err.message);
             });
           } else {
             const newMsg = await channel.send({
               embeds: [embed],
-              components: [buttons]
+              components: buttonComponents
             }).catch((err) => {
               console.warn(`[StatusManager] Gagal kirim message baru untuk ${s.name}:`, err.message);
               return null;
@@ -443,6 +446,29 @@ class StatusManager {
               this.saveState();
             }
           }
+        }
+      }
+
+      // 2.5. Update Live Admin Control Panel jika sudah di-setup
+      if (this.state.adminMessageId && this.state.adminChannelId) {
+        try {
+          const adminChan = await this.client.channels.fetch(this.state.adminChannelId).catch(() => null);
+          if (adminChan && adminChan.isTextBased()) {
+            const adminMsg = await adminChan.messages.fetch(this.state.adminMessageId).catch(() => null);
+            if (adminMsg) {
+              const vpsServer = servers.find(s => s.id === 'vps') || servers[0];
+              const vpsStatus = this.serverStatuses[vpsServer.id] || { online: false };
+              const adminEmbed = createAdminPanelEmbed(vpsServer, vpsStatus, this.config);
+              const adminButtons = createAdminPanelButtons(Boolean(vpsStatus.online));
+
+              await adminMsg.edit({
+                embeds: [adminEmbed],
+                components: adminButtons
+              }).catch(() => {});
+            }
+          }
+        } catch (err) {
+          console.warn('[StatusManager] Gagal update Live Admin Panel:', err.message);
         }
       }
 

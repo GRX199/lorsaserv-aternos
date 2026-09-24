@@ -18,6 +18,7 @@ class PlayerLogMonitor {
     this.logBuffer = [];
     this.flushTimer = null;
     this.inventoryCallbacks = new Map();
+    this.locationCallbacks = new Map();
   }
 
   /**
@@ -209,6 +210,24 @@ class PlayerLogMonitor {
         this.handleInventoryResponse(data);
       } catch (err) {
         console.warn('[PlayerLogMonitor] Gagal parse [INV_RES]:', err.message);
+      }
+      return;
+    }
+
+    // 0.5. Deteksi Respon Lokasi/Koordinat dari Script Engine BDS: [LOC_RES] {...}
+    if (line.includes('[LOC_RES]')) {
+      const idx = line.indexOf('[LOC_RES]');
+      let jsonStr = line.substring(idx + 9).trim();
+      const startJson = jsonStr.indexOf('{');
+      const endJson = jsonStr.lastIndexOf('}');
+      if (startJson !== -1 && endJson !== -1) {
+        jsonStr = jsonStr.substring(startJson, endJson + 1);
+      }
+      try {
+        const data = JSON.parse(jsonStr);
+        this.handleLocationResponse(data);
+      } catch (err) {
+        console.warn('[PlayerLogMonitor] Gagal parse [LOC_RES]:', err.message);
       }
       return;
     }
@@ -731,6 +750,74 @@ class PlayerLogMonitor {
     if (this.inventoryCallbacks.size === 1) {
       const [key, cb] = this.inventoryCallbacks.entries().next().value;
       this.inventoryCallbacks.delete(key);
+      cb(data);
+    }
+  }
+
+  /**
+   * Mengirim scriptevent bot:locate <targetName> ke konsol server BDS
+   * dan menunggu respon JSON [LOC_RES]
+   */
+  async queryPlayerLocation(playerName, timeoutMs = 6000) {
+    const { sendConsoleCommand } = require('./serverController');
+    const target = playerName.trim();
+    const key = target.toLowerCase();
+
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        if (this.locationCallbacks.has(key)) {
+          this.locationCallbacks.delete(key);
+          resolve({
+            error: `Waktu habis (timeout ${Math.round(timeoutMs / 1000)}s) menunggu respon dari server.\nPastikan server Minecraft aktif, behavior pack terpasang, dan pemain **${target}** sedang berada di dalam server.`
+          });
+        }
+      }, timeoutMs);
+
+      this.locationCallbacks.set(key, (data) => {
+        clearTimeout(timer);
+        resolve(data);
+      });
+
+      const cmdResult = sendConsoleCommand(`scriptevent bot:locate ${target}`);
+      if (!cmdResult.success) {
+        clearTimeout(timer);
+        this.locationCallbacks.delete(key);
+        resolve({
+          error: `Gagal mengirim perintah ke konsol server: ${cmdResult.error || cmdResult.message || 'Server offline atau screen tidak ditemukan'}.`
+        });
+      }
+    });
+  }
+
+  /**
+   * Memproses respon [LOC_RES] dari script engine Bedrock
+   */
+  handleLocationResponse(data) {
+    if (!data) return;
+
+    if (data.name) {
+      const key = data.name.toLowerCase();
+      const cb = this.locationCallbacks.get(key);
+      if (cb) {
+        this.locationCallbacks.delete(key);
+        cb(data);
+        return;
+      }
+    }
+
+    if (data.error) {
+      for (const [key, cb] of this.locationCallbacks.entries()) {
+        if (data.error.toLowerCase().includes(key)) {
+          this.locationCallbacks.delete(key);
+          cb(data);
+          return;
+        }
+      }
+    }
+
+    if (this.locationCallbacks.size === 1) {
+      const [key, cb] = this.locationCallbacks.entries().next().value;
+      this.locationCallbacks.delete(key);
       cb(data);
     }
   }

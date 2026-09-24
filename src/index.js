@@ -10,7 +10,11 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  PermissionFlagsBits
+  PermissionFlagsBits,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  EmbedBuilder
 } = require('discord.js');
 
 const { startHealthServer } = require('./server');
@@ -160,7 +164,11 @@ client.on('interactionCreate', async (interaction) => {
     // A. Interaksi Slash Command
     if (interaction.isChatInputCommand()) {
       // Perintah berbahaya / sensitif yang dikunci khusus untuk Admin
-      const adminOnlyCommands = ['cmd', 'op', 'deop', 'stop-server', 'restart-server', 'setup-status', 'setup-logs', 'setup-chat', 'inventory'];
+      const adminOnlyCommands = [
+        'cmd', 'op', 'deop', 'stop-server', 'restart-server',
+        'setup-status', 'setup-logs', 'setup-chat', 'setup-admin',
+        'inventory', 'locate', 'download-backup'
+      ];
 
       if (adminOnlyCommands.includes(interaction.commandName)) {
         const isOwner = interaction.guild?.ownerId === interaction.user.id;
@@ -294,6 +302,259 @@ client.on('interactionCreate', async (interaction) => {
           embeds: [embed],
           components: [row]
         }).catch(() => {});
+        return;
+      }
+
+      // Tombol 🎁 Hadiah Harian Member
+      if (interaction.customId === 'btn_member_daily') {
+        const modal = new ModalBuilder()
+          .setCustomId('modal_daily')
+          .setTitle('🎁 Klaim Hadiah Harian Minecraft');
+        const input = new TextInputBuilder()
+          .setCustomId('input_daily_player')
+          .setLabel('Gamertag Minecraft Anda (Sedang Online)')
+          .setPlaceholder('Contoh: Steve')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+        await interaction.showModal(modal);
+        return;
+      }
+
+      // Tombol 🏆 Profil 3D Member
+      if (interaction.customId === 'btn_member_profile') {
+        const modal = new ModalBuilder()
+          .setCustomId('modal_profile')
+          .setTitle('🏆 Cek Profil Pemain & Skin 3D');
+        const input = new TextInputBuilder()
+          .setCustomId('input_profile_player')
+          .setLabel('Gamertag Pemain yang Dicari')
+          .setPlaceholder('Contoh: Steve')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+        await interaction.showModal(modal);
+        return;
+      }
+
+      // Tombol 🏅 Leaderboard Jam Main
+      if (interaction.customId === 'btn_member_top') {
+        await interaction.deferReply({ ephemeral: true });
+        const tracker = statusManager?.playtimeTracker;
+        const top = tracker ? tracker.getLeaderboard(10) : [];
+        const desc = top.length > 0
+          ? top.map((p, idx) => {
+              const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `**#${idx + 1}**`;
+              return `${medal} **${p.name}** — \`${p.formattedTime}\` ${p.isOnline ? '🟢' : ''}`;
+            }).join('\n')
+          : 'Belum ada data aktivitas pemain tercatat.';
+
+        const embed = new EmbedBuilder()
+          .setColor(0xF1C40F)
+          .setTitle('🏅 Peringkat Jam Main Terbanyak (Top 10)')
+          .setDescription(desc)
+          .setFooter({ text: 'Waktu dihitung otomatis selama berada di server' })
+          .setTimestamp();
+
+        await interaction.editReply({ embeds: [embed] });
+        return;
+      }
+
+      // --- TOMBOL-TOMBOL ADMIN LIVE CONTROL PANEL ---
+      if (interaction.customId.startsWith('btn_admin_')) {
+        const isOwner = interaction.guild?.ownerId === interaction.user.id;
+        const isAdmin = isOwner || interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)
+          || interaction.member?.permissions?.has(PermissionFlagsBits.Administrator);
+
+        if (!isAdmin) {
+          await interaction.reply({
+            content: '❌ **Akses Ditolak**: Tombol panel kontrol ini khusus untuk **Administrator**!',
+            ephemeral: true
+          });
+          return;
+        }
+
+        // 🟢 Nyalakan Server
+        if (interaction.customId === 'btn_admin_start') {
+          await interaction.deferReply({ ephemeral: true });
+          const { startServer } = require('./serverController');
+          const res = await startServer();
+          await interaction.editReply({ content: res.success ? `🚀 ${res.message}` : `⚠️ ${res.message}` });
+          return;
+        }
+
+        // 🔴 Matikan Server
+        if (interaction.customId === 'btn_admin_stop') {
+          await interaction.deferReply({ ephemeral: true });
+          const { stopServer } = require('./serverController');
+          const res = await stopServer();
+          await interaction.editReply({ content: res.success ? `🛑 ${res.message}` : `⚠️ ${res.message}` });
+          return;
+        }
+
+        // 🔄 Restart Server
+        if (interaction.customId === 'btn_admin_restart') {
+          await interaction.deferReply({ ephemeral: true });
+          const { restartServer } = require('./serverController');
+          const res = await restartServer();
+          await interaction.editReply({ content: res.success ? `🔄 ${res.message}` : `⚠️ ${res.message}` });
+          return;
+        }
+
+        // 🎒 Cek Inventory Pemain (Buka Modal)
+        if (interaction.customId === 'btn_admin_inv') {
+          const modal = new ModalBuilder()
+            .setCustomId('modal_admin_inv')
+            .setTitle('🎒 Inspeksi Inventory Pemain');
+          const input = new TextInputBuilder()
+            .setCustomId('target_player')
+            .setLabel('Gamertag Pemain Minecraft')
+            .setPlaceholder('Contoh: Steve')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+          modal.addComponents(new ActionRowBuilder().addComponents(input));
+          await interaction.showModal(modal);
+          return;
+        }
+
+        // 📍 Lacak Koordinat Pemain (Buka Modal)
+        if (interaction.customId === 'btn_admin_locate') {
+          const modal = new ModalBuilder()
+            .setCustomId('modal_admin_locate')
+            .setTitle('📍 Lacak Koordinat & Dimensi Pemain');
+          const input = new TextInputBuilder()
+            .setCustomId('target_player')
+            .setLabel('Gamertag Pemain Minecraft')
+            .setPlaceholder('Contoh: Steve')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+          modal.addComponents(new ActionRowBuilder().addComponents(input));
+          await interaction.showModal(modal);
+          return;
+        }
+
+        // 👑 Kelola OP (Buka Modal)
+        if (interaction.customId === 'btn_admin_op') {
+          const modal = new ModalBuilder()
+            .setCustomId('modal_admin_op')
+            .setTitle('👑 Beri atau Cabut Operator (OP)');
+          const actionInput = new TextInputBuilder()
+            .setCustomId('op_action')
+            .setLabel('Tindakan (Ketik "op" atau "deop")')
+            .setPlaceholder('op / deop')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+          const playerInput = new TextInputBuilder()
+            .setCustomId('target_player')
+            .setLabel('Gamertag Pemain')
+            .setPlaceholder('Contoh: Steve')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+          modal.addComponents(
+            new ActionRowBuilder().addComponents(actionInput),
+            new ActionRowBuilder().addComponents(playerInput)
+          );
+          await interaction.showModal(modal);
+          return;
+        }
+
+        // 📥 Unduh Backup Dunia
+        if (interaction.customId === 'btn_admin_backup') {
+          const backupCmd = client.commands.get('download-backup') || client.commands.get('backup');
+          if (backupCmd) {
+            await backupCmd.execute(interaction, { config, statusManager, client });
+          }
+          return;
+        }
+
+        // ⚡ Konsol CMD (Buka Modal)
+        if (interaction.customId === 'btn_admin_cmd') {
+          const modal = new ModalBuilder()
+            .setCustomId('modal_admin_cmd')
+            .setTitle('⚡ Kirim Perintah Konsol BDS');
+          const input = new TextInputBuilder()
+            .setCustomId('cmd_text')
+            .setLabel('Perintah Konsol (tanpa tanda /)')
+            .setPlaceholder('Contoh: weather clear atau time set day')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+          modal.addComponents(new ActionRowBuilder().addComponents(input));
+          await interaction.showModal(modal);
+          return;
+        }
+
+        // 🧹 Clear Lag (Bersihkan Sampah Mengapung)
+        if (interaction.customId === 'btn_admin_clearlag') {
+          await interaction.deferReply({ ephemeral: true });
+          const { sendConsoleCommand } = require('./serverController');
+          const res = sendConsoleCommand('kill @e[type=item]');
+          await interaction.editReply({
+            content: res.success
+              ? '🧹 **Clear Lag Berhasil!** Seluruh sampah & item tercecer di tanah telah dibersihkan.'
+              : `⚠️ Gagal membersihkan item: ${res.error || res.message}`
+          });
+          return;
+        }
+      }
+    }
+
+    // C. Interaksi Formulir Pop-up (Modals)
+    if (interaction.isModalSubmit()) {
+      const context = { config, statusManager, client };
+
+      // Modal Hadiah Harian
+      if (interaction.customId === 'modal_daily') {
+        const gamerTag = interaction.fields.getTextInputValue('input_daily_player').trim();
+        interaction.options = { getString: () => gamerTag };
+        const cmd = client.commands.get('daily');
+        if (cmd) await cmd.execute(interaction, context);
+        return;
+      }
+
+      // Modal Profil 3D
+      if (interaction.customId === 'modal_profile') {
+        const gamerTag = interaction.fields.getTextInputValue('input_profile_player').trim();
+        interaction.options = { getString: () => gamerTag };
+        const cmd = client.commands.get('profile');
+        if (cmd) await cmd.execute(interaction, context);
+        return;
+      }
+
+      // Modal Cek Inventory Admin
+      if (interaction.customId === 'modal_admin_inv') {
+        const gamerTag = interaction.fields.getTextInputValue('target_player').trim();
+        interaction.options = { getString: () => gamerTag };
+        const cmd = client.commands.get('inventory');
+        if (cmd) await cmd.execute(interaction, context);
+        return;
+      }
+
+      // Modal Lacak Lokasi Admin
+      if (interaction.customId === 'modal_admin_locate') {
+        const gamerTag = interaction.fields.getTextInputValue('target_player').trim();
+        interaction.options = { getString: () => gamerTag };
+        const cmd = client.commands.get('locate');
+        if (cmd) await cmd.execute(interaction, context);
+        return;
+      }
+
+      // Modal Perintah Konsol Admin
+      if (interaction.customId === 'modal_admin_cmd') {
+        const cmdText = interaction.fields.getTextInputValue('cmd_text').trim();
+        interaction.options = { getString: () => cmdText };
+        const cmd = client.commands.get('cmd');
+        if (cmd) await cmd.execute(interaction, context);
+        return;
+      }
+
+      // Modal Kelola OP Admin
+      if (interaction.customId === 'modal_admin_op') {
+        const action = interaction.fields.getTextInputValue('op_action').toLowerCase().trim();
+        const gamerTag = interaction.fields.getTextInputValue('target_player').trim();
+        interaction.options = { getString: () => gamerTag };
+        const cmdName = action === 'deop' ? 'deop' : 'op';
+        const cmd = client.commands.get(cmdName);
+        if (cmd) await cmd.execute(interaction, context);
         return;
       }
     }

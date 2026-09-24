@@ -99,28 +99,29 @@ function createStatusEmbed(status, serverConfig, globalConfig) {
 }
 
 /**
- * Membuat Action Row berisi tombol interaktif (Connect Android, Nyalakan Server, Refresh, Salin IP)
+ * Membuat Action Rows berisi tombol interaktif ramah PC & Mobile
  * @param {object} serverConfig - Konfigurasi server { id, name, ip, port, isLocal }
  * @param {boolean} isOnline - Status apakah server sedang online
  * @param {object} globalConfig - Objek konfigurasi global config.json
  */
 function createStatusButtons(serverConfig, isOnline = true, globalConfig = null) {
-  const row = new ActionRowBuilder();
+  const row1 = new ActionRowBuilder();
+  const row2 = new ActionRowBuilder();
   const sId = serverConfig.id || 'main';
 
-  // Jika server online: berikan tombol Connect Android (Link Button resmi) & Salin IP
+  // Baris 1: Koneksi & Kendali Utama (Maksimal 3 tombol agar pas di layar HP)
   if (isOnline) {
     const connectUrl = getConnectUrl(serverConfig, globalConfig);
 
-    row.addComponents(
+    row1.addComponents(
       new ButtonBuilder()
         .setStyle(ButtonStyle.Link)
         .setURL(connectUrl)
-        .setLabel('Connect (Android)')
+        .setLabel('Masuk Game')
         .setEmoji('🎮'),
       new ButtonBuilder()
         .setCustomId(`btn_copy_ip_${sId}`)
-        .setLabel('Salin IP & Port')
+        .setLabel('Salin IP')
         .setEmoji('📋')
         .setStyle(ButtonStyle.Primary),
       new ButtonBuilder()
@@ -130,46 +131,177 @@ function createStatusButtons(serverConfig, isOnline = true, globalConfig = null)
         .setStyle(ButtonStyle.Secondary)
     );
   } else {
-    // Jika server offline:
     if (serverConfig.isLocal) {
-      // Jika server VPS lokal: tombol Nyalakan Server
-      row.addComponents(
+      row1.addComponents(
         new ButtonBuilder()
           .setCustomId('btn_start_server')
-          .setLabel('Nyalakan Server')
+          .setLabel('Nyalakan')
           .setEmoji('▶')
           .setStyle(ButtonStyle.Success)
       );
     } else {
-      // Jika Aternos: tombol link langsung buka dashboard Aternos di browser
-      row.addComponents(
+      row1.addComponents(
         new ButtonBuilder()
           .setStyle(ButtonStyle.Link)
           .setURL('https://aternos.org/servers/')
-          .setLabel('Buka Aternos Web')
+          .setLabel('Buka Aternos')
           .setEmoji('🔗')
       );
     }
 
-    row.addComponents(
+    row1.addComponents(
       new ButtonBuilder()
         .setCustomId(`btn_copy_ip_${sId}`)
-        .setLabel('Salin IP & Port')
+        .setLabel('Salin IP')
         .setEmoji('📋')
         .setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId('btn_refresh_status')
-        .setLabel('Perbarui Status')
+        .setLabel('Perbarui')
         .setEmoji('🔄')
         .setStyle(ButtonStyle.Primary)
     );
   }
 
-  return row;
+  // Baris 2: Fitur Pemain & Komunitas (Mobile Responsive)
+  row2.addComponents(
+    new ButtonBuilder()
+      .setCustomId('btn_member_daily')
+      .setLabel('Hadiah Harian')
+      .setEmoji('🎁')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('btn_member_profile')
+      .setLabel('Profil 3D')
+      .setEmoji('🏆')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('btn_member_top')
+      .setLabel('Peringkat')
+      .setEmoji('🏅')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  return [row1, row2];
+}
+
+/**
+ * Membuat Embed Panel Kontrol Khusus Admin
+ */
+function createAdminPanelEmbed(serverConfig, status, globalConfig) {
+  const isOnline = Boolean(status && status.online);
+  const serverName = serverConfig?.name || 'Minecraft Bedrock';
+  const playersOnline = status?.players?.online ?? 0;
+  const playersMax = status?.players?.max ?? 20;
+
+  const embed = new EmbedBuilder()
+    .setColor(0xF1C40F) // Gold
+    .setTitle(`🛠️ LIVE ADMIN CONTROL PANEL • ${serverName.toUpperCase()}`)
+    .setDescription([
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `👑 **Panel Pusat Kendali Server Minecraft Bedrock**`,
+      `Gunakan tombol interaktif di bawah untuk mengontrol server, memantau pemain, atau menjalankan fungsi darurat langsung tanpa membuka SSH terminal.`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `📊 **Status Server**: ${isOnline ? '`🟢 ONLINE`' : '`🔴 OFFLINE`'} • 👥 **Pemain**: \`${playersOnline}/${playersMax}\``,
+      `💻 **Engine / VPS**: \`Minecraft Bedrock Dedicated Server\` (Tencent SG)`,
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`,
+      `🔒 *Tombol di bawah hanya dapat dieksekusi oleh Administrator.*`
+    ].join('\n'))
+    .setThumbnail(serverConfig?.icon || globalConfig?.mcserver?.icon || null)
+    .addFields(
+      {
+        name: '⚡ Kontrol Daya',
+        value: '🟢 **Start** • 🔴 **Stop** • 🔄 **Restart**',
+        inline: true
+      },
+      {
+        name: '🔍 Inspeksi Pemain',
+        value: '🎒 **Inventory** • 📍 **Koordinat**',
+        inline: true
+      },
+      {
+        name: '💾 Data & Manajemen',
+        value: '📥 **Backup ZIP** • ⚡ **CMD Konsol** • 🧹 **Clear Lag**',
+        inline: false
+      }
+    )
+    .setFooter({ text: 'SASY199 Live Admin Control Hub • Mobile & Desktop Responsive' })
+    .setTimestamp();
+
+  return embed;
+}
+
+/**
+ * Membuat Action Rows Tombol untuk Admin Control Panel
+ */
+function createAdminPanelButtons(isOnline = true) {
+  // Baris 1: Kontrol Daya Server
+  const rowPower = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('btn_admin_start')
+      .setLabel('Nyalakan')
+      .setEmoji('🟢')
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(isOnline),
+    new ButtonBuilder()
+      .setCustomId('btn_admin_stop')
+      .setLabel('Matikan')
+      .setEmoji('🔴')
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!isOnline),
+    new ButtonBuilder()
+      .setCustomId('btn_admin_restart')
+      .setLabel('Restart')
+      .setEmoji('🔄')
+      .setStyle(ButtonStyle.Primary)
+  );
+
+  // Baris 2: Pemantauan Pemain Real-Time
+  const rowInspect = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('btn_admin_inv')
+      .setLabel('Cek Inventory')
+      .setEmoji('🎒')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('btn_admin_locate')
+      .setLabel('Lacak Lokasi')
+      .setEmoji('📍')
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
+      .setCustomId('btn_admin_op')
+      .setLabel('Kelola OP')
+      .setEmoji('👑')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  // Baris 3: Manajemen & Utilitas
+  const rowUtil = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('btn_admin_backup')
+      .setLabel('Unduh Backup')
+      .setEmoji('📥')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('btn_admin_cmd')
+      .setLabel('Konsol CMD')
+      .setEmoji('⚡')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('btn_admin_clearlag')
+      .setLabel('Bersihkan Lag')
+      .setEmoji('🧹')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  return [rowPower, rowInspect, rowUtil];
 }
 
 module.exports = {
   createStatusEmbed,
   createStatusButtons,
+  createAdminPanelEmbed,
+  createAdminPanelButtons,
   getConnectUrl
 };
+

@@ -173,8 +173,37 @@ try {
           console.warn(`[INV_RES] {"error":"Gagal membaca inventory: ${err.message}"}`);
         }
       }
+
+      // Handler untuk inspeksi lokasi/koordinat pemain (/locate <gamertag>)
+      if (event.id === "bot:locate") {
+        const targetName = (event.message || "").trim();
+        if (!targetName) return;
+
+        const players = world.getPlayers();
+        const player = players.find(p => p.name.toLowerCase() === targetName.toLowerCase());
+
+        if (!player) {
+          console.warn(`[LOC_RES] {"error":"Pemain '${targetName}' sedang offline atau tidak ditemukan."}`);
+          return;
+        }
+
+        try {
+          const loc = player.location;
+          const dim = player.dimension?.id ? player.dimension.id.replace(/^minecraft:/, "") : "overworld";
+          const res = {
+            name: player.name,
+            x: Math.round(loc.x * 10) / 10,
+            y: Math.round(loc.y * 10) / 10,
+            z: Math.round(loc.z * 10) / 10,
+            dimension: dim
+          };
+          console.warn(`[LOC_RES] ${JSON.stringify(res)}`);
+        } catch (err) {
+          console.warn(`[LOC_RES] {"error":"Gagal membaca lokasi: ${err.message}"}`);
+        }
+      }
     });
-    console.warn("[Scripting] Subscribed to scriptEventReceive (bot:inv)");
+    console.warn("[Scripting] Subscribed to scriptEventReceive (bot:inv & bot:locate)");
   }
 } catch (e) {
   console.warn(`[Scripting Error scriptEventReceive] ${e.message}`);
