@@ -74,11 +74,11 @@ sed -i 's/^tick-distance=.*/tick-distance=4/' server.properties
 sed -i 's/^max-players=.*/max-players=10/' server.properties
 sed -i 's/^max-threads=.*/max-threads=4/' server.properties
 
-# Pastikan transport menggunakan NetherNet (wajib untuk BDS 1.26+)
+# Pastikan protokol transport menggunakan raknet agar kompatibel dengan UDP port forwarding & direct client connect
 if grep -q "^transport=" server.properties; then
-    sed -i 's/^transport=.*/transport=nethernet/' server.properties
+    sed -i 's/^transport=.*/transport=raknet/' server.properties
 else
-    echo "transport=nethernet" >> server.properties
+    echo "transport=raknet" >> server.properties
 fi
 
 # 6. Pasang Service systemd agar server jalan otomatis & bisa dikontrol Bot
