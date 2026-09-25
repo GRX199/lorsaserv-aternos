@@ -123,20 +123,19 @@ async function initServerConfig(cfg) {
   cfg.webPort = port;
   cfg.publicUrl = process.env.PUBLIC_URL || `http://${cfg.publicIp}:${port}`;
 
-  if (cfg.mcserver && publicIp) {
-    cfg.mcserver.ip = publicIp;
-  }
-
-  if (cfg.servers && Array.isArray(cfg.servers)) {
-    const vps = cfg.servers.find(s => s.id === 'vps' || s.isLocal);
-    if (vps && publicIp) {
-      vps.ip = publicIp;
-      console.log(`[Config] Otomatis mendeteksi IP Publik VPS untuk ${vps.name}: ${publicIp}`);
+  if (cfg.mcserver) {
+    if (!cfg.mcserver.ip || cfg.mcserver.ip === 'auto' || publicIp) {
+      cfg.mcserver.ip = publicIp || cfg.publicIp;
     }
   }
 
-  if (process.platform === 'linux' && cfg.mcserver) {
-    cfg.mcserver.pingHost = '127.0.0.1';
+  if (cfg.servers && Array.isArray(cfg.servers)) {
+    for (const s of cfg.servers) {
+      if (!s.ip || s.ip === 'auto' || (s.id === 'vps' && publicIp)) {
+        s.ip = publicIp || cfg.publicIp;
+        console.log(`[Config] Menggunakan IP Publik untuk ${s.name}: ${s.ip}`);
+      }
+    }
   }
 }
 

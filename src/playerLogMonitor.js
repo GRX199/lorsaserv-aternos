@@ -48,6 +48,25 @@ class PlayerLogMonitor {
         this.sendStartupLogMessage();
       }, 3000);
     }
+
+    // Kirim perintah 'list' ke konsol server setelah 4 detik untuk sinkronisasi daftar pemain yang sudah online sebelumnya
+    setTimeout(() => {
+      try {
+        const { sendConsoleCommand } = require('./serverController');
+        sendConsoleCommand('list');
+      } catch {}
+    }, 4000);
+
+    // Sinkronkan berkala setiap 3 menit
+    if (this.listSyncTimer) clearInterval(this.listSyncTimer);
+    this.listSyncTimer = setInterval(() => {
+      if (!this.isStopping) {
+        try {
+          const { sendConsoleCommand } = require('./serverController');
+          sendConsoleCommand('list');
+        } catch {}
+      }
+    }, 3 * 60 * 1000);
   }
 
   getLogFilePath() {
@@ -185,6 +204,10 @@ class PlayerLogMonitor {
       clearTimeout(this.flushTimer);
       this.flushTimer = null;
     }
+    if (this.listSyncTimer) {
+      clearInterval(this.listSyncTimer);
+      this.listSyncTimer = null;
+    }
     this.logBuffer = [];
     this.cleanup();
   }
@@ -287,6 +310,51 @@ class PlayerLogMonitor {
       console.log(`[PlayerLogMonitor] 💀 Player Death Terdeteksi: ${victim} (Penyebab: ${cause}, Killer: ${killer || 'none'})`);
       this.forwardDeathFeedToDiscord(victim, cause, killer);
       return;
+    }
+
+    // 1.9. Deteksi Output Perintah Konsol /list
+    // Format BDS: There are 4/10 players online:
+    // Player1, Player2, Player3, Player4
+    // Atau PaperMC: There are 4 of a max of 20 players online: Player1, Player2
+    const listMatch = line.match(/There are (\d+)(?:\/| of a max of )(\d+) players online:?(.*)/i);
+    if (listMatch) {
+      const count = parseInt(listMatch[1], 10) || 0;
+      const inlineNames = (listMatch[3] || '').trim();
+      if (count === 0) {
+        this.onlinePlayers.clear();
+        console.log('[PlayerLogMonitor] 📋 Konsol /list: 0 pemain online.');
+        if (this.statusManager) this.statusManager.updatePresence();
+      } else if (inlineNames) {
+        const names = inlineNames.split(',').map(s => s.trim()).filter(Boolean);
+        this.onlinePlayers.clear();
+        for (const name of names) {
+          this.onlinePlayers.add(name);
+        }
+        console.log(`[PlayerLogMonitor] 📋 Konsol /list mendeteksi ${names.length} pemain: ${names.join(', ')}`);
+        if (this.statusManager) {
+          this.statusManager.updatePresence();
+        }
+      } else {
+        this.waitingForListNames = count;
+      }
+      return;
+    }
+
+    if (this.waitingForListNames) {
+      const names = line.split(',').map(s => s.trim()).filter(Boolean);
+      if (names.length > 0 && !line.includes('INFO') && !line.includes('WARN')) {
+        this.onlinePlayers.clear();
+        for (const name of names) {
+          this.onlinePlayers.add(name);
+        }
+        console.log(`[PlayerLogMonitor] 📋 Konsol /list sinkronisasi nama pemain (${this.onlinePlayers.size}): ${names.join(', ')}`);
+        this.waitingForListNames = 0;
+        if (this.statusManager) {
+          this.statusManager.updatePresence();
+        }
+        return;
+      }
+      this.waitingForListNames = 0;
     }
 
     // 2. Deteksi Player Connected / Join

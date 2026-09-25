@@ -14,13 +14,12 @@ function cleanMinecraftFormatting(text) {
  * Memeriksa apakah host adalah loopback / local IP
  */
 function isLocalOrPrivateHost(host) {
-  if (!host) return true;
+  if (!host || host === 'auto') return false;
   const h = host.toLowerCase().trim();
   return (
     h === '127.0.0.1' ||
     h === 'localhost' ||
     h === '::1' ||
-    h === 'auto' ||
     h.startsWith('192.168.') ||
     h.startsWith('10.') ||
     h.startsWith('172.16.')
@@ -227,39 +226,63 @@ async function pingViaMcsrvstat(host, port, type = 'bedrock', timeoutMs = 4000) 
 
 /**
  * Fungsi utama untuk mengecek status server Minecraft (Bedrock / Java)
- * Untuk server lokal (127.0.0.1 VPS), hanya menggunakan UDP langsung dan TIDAK PERNAH query mcstatus API
+ * Mendukung primary host, fallback host (IP Publik), dan fallback API publik
  */
-async function checkServerStatus(host, port = 19132, type = 'bedrock') {
+async function checkServerStatus(host, port = 19132, type = 'bedrock', fallbackHost = null) {
   const isBedrock = type.toLowerCase() === 'bedrock';
-  const isLocal = isLocalOrPrivateHost(host);
+  const defaultPublicIp = '129.226.95.58';
 
-  // 1. Coba RakNet UDP langsung
-  if (isBedrock) {
-    try {
-      const udpResult = await pingBedrockUDP(host, port, 2500);
-      return udpResult;
-    } catch (udpErr) {
-      // Jika UDP timeout pada host lokal (127.0.0.1), berarti server lokal memang OFFLINE!
-      if (isLocal) {
-        return {
-          online: false,
-          source: 'local-udp',
-          host,
-          port,
-          type,
-          motd: 'Server Offline',
-          version: 'Bedrock',
-          players: { online: 0, max: 10, list: [] }
-        };
-      }
+  // Selesaikan IP jika 'auto' atau falsy
+  let primaryHost = host;
+  if (!primaryHost || primaryHost === 'auto') {
+    primaryHost = fallbackHost && fallbackHost !== 'auto' ? fallbackHost : defaultPublicIp;
+  }
+
+  let secondaryHost = fallbackHost;
+  if (!secondaryHost || secondaryHost === 'auto' || secondaryHost === primaryHost) {
+    if (!isLocalOrPrivateHost(primaryHost) && primaryHost !== defaultPublicIp) {
+      secondaryHost = defaultPublicIp;
+    } else if (primaryHost !== defaultPublicIp) {
+      secondaryHost = defaultPublicIp;
+    } else {
+      secondaryHost = null;
     }
   }
 
-  // 2. Fallback ke API publik HANYA jika bukan host lokal (misal untuk domain Aternos)
-  if (!isLocal && host !== 'auto') {
+  // 1. Coba RakNet UDP langsung ke primaryHost
+  if (isBedrock && primaryHost) {
+    try {
+      const udpResult = await pingBedrockUDP(primaryHost, port, 2500);
+      if (udpResult && udpResult.online) {
+        return udpResult;
+      }
+    } catch (udpErr) {
+      // Primary host UDP gagal / timeout
+    }
+  }
+
+  // 1b. Coba RakNet UDP langsung ke secondaryHost (misal IP Publik jika primaryHost adalah 127.0.0.1)
+  if (isBedrock && secondaryHost && secondaryHost !== primaryHost) {
+    try {
+      const udpResult2 = await pingBedrockUDP(secondaryHost, port, 2500);
+      if (udpResult2 && udpResult2.online) {
+        return udpResult2;
+      }
+    } catch (udpErr2) {
+      // Secondary host UDP gagal
+    }
+  }
+
+  // 2. Fallback ke API publik (mcstatus.io & mcsrvstat.us)
+  // Tentukan host publik yang sah untuk di-query dari internet
+  const publicApiHost = (!isLocalOrPrivateHost(primaryHost) && primaryHost !== '127.0.0.1')
+    ? primaryHost
+    : (secondaryHost && !isLocalOrPrivateHost(secondaryHost) ? secondaryHost : defaultPublicIp);
+
+  if (publicApiHost) {
     // 2a. Coba mcstatus.io API
     try {
-      const apiResult = await pingViaApi(host, port, type, 4000);
+      const apiResult = await pingViaApi(publicApiHost, port, type, 4000);
       if (apiResult && apiResult.online) {
         return apiResult;
       }
@@ -267,22 +290,22 @@ async function checkServerStatus(host, port = 19132, type = 'bedrock') {
 
     // 2b. Fallback ke mcsrvstat.us API
     try {
-      const srvStatResult = await pingViaMcsrvstat(host, port, type, 4000);
+      const srvStatResult = await pingViaMcsrvstat(publicApiHost, port, type, 4000);
       if (srvStatResult && srvStatResult.online) {
         return srvStatResult;
       }
     } catch (srvErr) {}
 
-    // 2c. Cek Java/Geyser jika type Bedrock tidak merespon (banyak server Aternos menggunakan Paper/Geyser)
+    // 2c. Cek Java/Geyser jika type Bedrock tidak merespon
     if (isBedrock) {
       try {
-        const javaResult = await pingViaApi(host, port, 'java', 3000);
+        const javaResult = await pingViaApi(publicApiHost, port, 'java', 3000);
         if (javaResult && javaResult.online) {
           return javaResult;
         }
       } catch {}
       try {
-        const javaSrv = await pingViaMcsrvstat(host, port, 'java', 3000);
+        const javaSrv = await pingViaMcsrvstat(publicApiHost, port, 'java', 3000);
         if (javaSrv && javaSrv.online) {
           return javaSrv;
         }
@@ -293,7 +316,7 @@ async function checkServerStatus(host, port = 19132, type = 'bedrock') {
   return {
     online: false,
     source: 'none',
-    host,
+    host: primaryHost || host,
     port,
     type,
     motd: 'Server Offline',

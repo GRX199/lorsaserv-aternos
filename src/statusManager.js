@@ -140,11 +140,23 @@ class StatusManager {
    * Mengambil status server dengan pengecekan ganda (UDP Ping + systemd fallback untuk VPS lokal)
    */
   async getStatusForServer(s) {
-    const pingHost = (s.isLocal && process.platform === 'linux') ? '127.0.0.1' : s.ip;
-    let status = await checkServerStatus(pingHost, s.port, s.type);
+    const defaultPublicIp = this.config.publicIp || process.env.SERVER_IP || '129.226.95.58';
+    const serverPublicHost = (s.ip && s.ip !== 'auto') ? s.ip : defaultPublicIp;
+    const isLinuxLocal = Boolean(s.isLocal && process.platform === 'linux');
 
-    // Jika server lokal VPS dan UDP belum merespon, periksa langsung ke systemd service
-    if (s.isLocal && process.platform === 'linux' && !status.online) {
+    // Prioritaskan IP Publik server (paling akurat untuk RakNet UDP Bedrock), dengan loopback 127.0.0.1 sebagai fallback
+    const primaryHost = serverPublicHost;
+    const fallbackHost = isLinuxLocal ? '127.0.0.1' : defaultPublicIp;
+
+    let status = await checkServerStatus(primaryHost, s.port, s.type, fallbackHost);
+
+    // Jika UDP ke primaryHost belum berhasil dan berjalan di Linux lokal, coba loopback 127.0.0.1
+    if ((!status || !status.online) && isLinuxLocal) {
+      status = await checkServerStatus('127.0.0.1', s.port, s.type, serverPublicHost);
+    }
+
+    // Jika server lokal VPS dan pinger jaringan belum merespon, periksa langsung ke systemd service
+    if (isLinuxLocal && (!status || !status.online)) {
       try {
         const sysStatus = await isServerRunning();
         if (sysStatus.running) {
@@ -152,11 +164,11 @@ class StatusManager {
             online: true,
             source: 'systemd-service',
             latencyMs: 1,
-            host: s.ip,
+            host: serverPublicHost,
             port: s.port,
             type: s.type,
             edition: 'Bedrock',
-            motd: 'SASY199 • Minecraft Bedrock Server (Aktif)',
+            motd: s.name || 'SASY199 • Minecraft Bedrock Server (Aktif)',
             version: '1.26.51',
             players: { online: 0, max: 10, list: [] },
             gamemode: 'Survival'
@@ -171,11 +183,11 @@ class StatusManager {
     if (s.isLocal && this.playerLogMonitor) {
       const livePlayers = this.playerLogMonitor.getOnlinePlayers();
       if (livePlayers.length > 0) {
+        status = status || { online: true };
+        status.online = true; // Jika ada pemain terdeteksi, pasti server ONLINE!
         status.players = status.players || { max: 10 };
         status.players.list = livePlayers;
-        if (status.online) {
-          status.players.online = Math.max(status.players.online || 0, livePlayers.length);
-        }
+        status.players.online = Math.max(status.players.online || 0, livePlayers.length);
       }
     }
 
@@ -558,12 +570,28 @@ class StatusManager {
         }
 
         const count = isOnline ? online : 0;
-        const targetNick = `${baseName} [${count}/${max}]`;
+        const nickFormat = isOnline
+          ? (this.config.display?.botNicknameOnline || '{name} [{online}/{max}]')
+          : (this.config.display?.botNicknameOffline || '{name} [0/{max}]');
+
+        let targetNick = nickFormat
+          .replace('{name}', baseName)
+          .replace('{online}', count)
+          .replace('{max}', max);
+
+        // Batasi panjang maksimal 32 karakter (syarat mutlak Discord API)
+        if (targetNick.length > 32) {
+          const suffix = ` [${count}/${max}]`;
+          const maxBase = Math.max(1, 32 - suffix.length);
+          baseName = baseName.substring(0, maxBase).trim();
+          targetNick = `${baseName}${suffix}`;
+        }
 
         if (me.nickname !== targetNick) {
           await me.setNickname(targetNick).catch((err) => {
             console.warn(`[StatusManager] Gagal set nickname bot di ${guild.name}:`, err.message);
           });
+          console.log(`[StatusManager] 🏷️ Berhasil memperbarui nama bot di server "${guild.name}" menjadi: "${targetNick}"`);
         }
       } catch (err) {
         // Abaikan error di guild tertentu
@@ -644,11 +672,13 @@ class StatusManager {
       }
     }
 
-    // Set presence & nickname segera saat start
-    this.updatePresence();
-
-    this.updateStatusEmbed();
-    this.updatePlayerCountChannel();
+    // Jalankan update status embed segera saat bot start (otomatis memperbarui presence & nickname)
+    this.updateStatusEmbed().then(() => {
+      this.updatePresence();
+      this.updatePlayerCountChannel();
+    }).catch(() => {
+      this.updatePresence();
+    });
 
     this.statusTimer = setInterval(() => {
       this.updateStatusEmbed();

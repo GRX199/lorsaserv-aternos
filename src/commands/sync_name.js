@@ -39,12 +39,23 @@ module.exports = {
       const hasNickPerm = me.permissions.has(PermissionFlagsBits.ChangeNickname)
         || me.permissions.has(PermissionFlagsBits.Administrator);
 
+      // 1. Sinkronkan via console command /list jika di Linux
+      if (process.platform === 'linux') {
+        try {
+          const { sendConsoleCommand } = require('../serverController');
+          sendConsoleCommand('list');
+        } catch {}
+      }
+
+      // 2. Refresh status server terkini secara live
+      await statusManager.updateStatusEmbed().catch(() => {});
+
       const status = statusManager.getLatestStatus();
       const isOnline = Boolean(status && status.online);
       const online = status?.players?.online ?? 0;
       const max = status?.players?.max ?? 10;
 
-      // Update presence
+      // Update presence & bot nickname
       statusManager.updatePresence();
 
       let nickResult = '';
@@ -57,7 +68,18 @@ module.exports = {
           const cleaned = me.nickname.replace(/\s*\[.*?\]\s*$/, '').trim();
           if (cleaned) baseName = cleaned;
         }
-        const targetNick = `${baseName} [${isOnline ? online : 0}/${max}]`;
+
+        const count = isOnline ? online : 0;
+        let targetNick = `${baseName} [${count}/${max}]`;
+
+        // Batasi 32 karakter
+        if (targetNick.length > 32) {
+          const suffix = ` [${count}/${max}]`;
+          const maxBase = Math.max(1, 32 - suffix.length);
+          baseName = baseName.substring(0, maxBase).trim();
+          targetNick = `${baseName}${suffix}`;
+        }
+
         await me.setNickname(targetNick);
         nickResult = `✅ **Nama bot berhasil diperbarui menjadi:** \`${targetNick}\``;
       }

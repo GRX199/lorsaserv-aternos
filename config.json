@@ -1,9 +1,10 @@
 {
+  "publicIp": "129.226.95.58",
   "servers": [
     {
       "id": "vps",
       "name": "SASY199 • VPS TENCENT (24/7)",
-      "ip": "auto",
+      "ip": "129.226.95.58",
       "port": 19132,
       "type": "bedrock",
       "isLocal": true,
@@ -11,7 +12,7 @@
     }
   ],
   "mcserver": {
-    "ip": "auto",
+    "ip": "129.226.95.58",
     "port": 19132,
     "type": "bedrock",
     "name": "SASY199 • VPS TENCENT (24/7)",
@@ -67,6 +68,8 @@
     "onlineChannelName": "🟢・{online}/{max}-online",
     "offlineChannelName": "🔴・offline",
     "presenceOnline": "👥 {online}/{max} pemain online",
-    "presenceOffline": "👥 0/{max} pemain (Offline)"
+    "presenceOffline": "👥 0/{max} pemain (Offline)",
+    "botNicknameOnline": "{name} [{online}/{max}]",
+    "botNicknameOffline": "{name} [0/{max}]"
   }
 }
