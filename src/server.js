@@ -242,11 +242,31 @@ function startHealthServer(port = 3000, getStatusCallback, config, getStatusMana
         return;
       }
 
-      // Sajikan index.html dengan suntikan <base href="/world-map/"> agar semua aset terhubung aman
+      // Sajikan index.html dengan suntikan <base href="/world-map/"> dan dark void theme agar area unrendered menyatu elegan
       if (safeRel === 'index.html' || safeRel === '') {
         let html = fs.readFileSync(targetFile, 'utf8');
         if (!html.includes('<base ')) {
           html = html.replace(/<head>/i, '<head>\n    <base href="/world-map/">');
+        }
+        if (!html.includes('unmined-dark-theme')) {
+          const darkStyle = `
+    <style id="unmined-dark-theme">
+      html, body, #map, .ol-viewport {
+        background-color: #121316 !important;
+        background: #121316 !important;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      .ol-layer {
+        background: transparent !important;
+      }
+      img.ol-tile {
+        background: transparent !important;
+      }
+    </style>`;
+          html = html.replace(/<\/head>/i, `${darkStyle}\n</head>`);
         }
         res.writeHead(200, {
           'Content-Type': 'text/html; charset=utf-8',
@@ -257,6 +277,18 @@ function startHealthServer(port = 3000, getStatusCallback, config, getStatusMana
       }
 
       if (!fs.existsSync(targetFile)) {
+        const ext = path.extname(targetFile).toLowerCase();
+        if (ext === '.png' || ext === '.jpg' || ext === '.webp') {
+          // Kirim 1x1 transparent PNG untuk tile kosong/unexplored chunk agar tidak muncul kotak broken atau putih
+          const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+          res.writeHead(200, {
+            'Content-Type': 'image/png',
+            'Content-Length': transparentPng.length,
+            'Cache-Control': 'public, max-age=3600'
+          });
+          res.end(transparentPng);
+          return;
+        }
         res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('File visual map tidak ditemukan: ' + safeRel);
         return;
@@ -649,6 +681,17 @@ function startHealthServer(port = 3000, getStatusCallback, config, getStatusMana
           'Cache-Control': ext === '.png' || ext === '.jpg' || ext === '.webp' ? 'public, max-age=86400' : 'no-cache'
         });
         fs.createReadStream(fallbackTarget).pipe(res);
+        return;
+      }
+
+      if (cleanPath.startsWith('tiles/') && (cleanPath.endsWith('.png') || cleanPath.endsWith('.jpg') || cleanPath.endsWith('.webp'))) {
+        const transparentPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+        res.writeHead(200, {
+          'Content-Type': 'image/png',
+          'Content-Length': transparentPng.length,
+          'Cache-Control': 'public, max-age=3600'
+        });
+        res.end(transparentPng);
         return;
       }
     }
