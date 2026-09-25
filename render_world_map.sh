@@ -110,12 +110,16 @@ mkdir -p "${OUTPUT_DIR}"
 echo "🔨 Me-render visual blok dunia Minecraft Bedrock LevelDB..."
 echo "ℹ️  Menggunakan nice -n 19 (background CPU) agar BDS tidak mengalami lag."
 
+ZOOM_IN="${1:-2}"
+echo "🔍 Tingkat Zoom-in: ${ZOOM_IN} (Tingkat detail tinggi per blok)"
+
 EXEC_DIR=$(dirname "${UNMINED_BIN}")
 cd "${EXEC_DIR}"
 
 nice -n 19 "${UNMINED_BIN}" web render \
   --world="${WORLD_DIR}" \
   --output="${OUTPUT_DIR}" \
+  --zoomin="${ZOOM_IN}" \
   --imageformat=png \
   -c \
   --players \
@@ -125,6 +129,7 @@ nice -n 19 "${UNMINED_BIN}" web render \
     nice -n 19 "${UNMINED_BIN}" web render \
       --world="${WORLD_DIR}" \
       --output="${OUTPUT_DIR}" \
+      --zoomin="${ZOOM_IN}" \
       --imageformat=png \
       -c
   }
