@@ -166,7 +166,8 @@ client.on('interactionCreate', async (interaction) => {
       const adminOnlyCommands = [
         'cmd', 'op', 'deop', 'stop-server', 'restart-server',
         'setup-status', 'setup-logs', 'setup-chat', 'setup-admin',
-        'inventory', 'locate', 'download-backup', 'sync-name', 'render-map'
+        'inventory', 'locate', 'download-backup', 'sync-name', 'render-map',
+        'enchant-admin'
       ];
 
       if (adminOnlyCommands.includes(interaction.commandName)) {
@@ -457,6 +458,32 @@ client.on('interactionCreate', async (interaction) => {
           return;
         }
 
+        // ✨ Enchant Instan Pemain (Buka Modal)
+        if (interaction.customId === 'btn_admin_enchant') {
+          const modal = new ModalBuilder()
+            .setCustomId('modal_admin_enchant')
+            .setTitle('✨ Instant Max Enchant Pemain');
+          const playerInput = new TextInputBuilder()
+            .setCustomId('target_player')
+            .setLabel('Gamertag Pemain Minecraft')
+            .setPlaceholder('Contoh: Steve')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+          const typeInput = new TextInputBuilder()
+            .setCustomId('enchant_type')
+            .setLabel('Tipe (all/sword/pickaxe/armor/bow/mace)')
+            .setPlaceholder('all, sword, pickaxe, silkpick, axe, armor, bow, mace')
+            .setValue('all')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false);
+          modal.addComponents(
+            new ActionRowBuilder().addComponents(playerInput),
+            new ActionRowBuilder().addComponents(typeInput)
+          );
+          await interaction.showModal(modal);
+          return;
+        }
+
         // 📥 Unduh Backup Dunia
         if (interaction.customId === 'btn_admin_backup') {
           const backupCmd = client.commands.get('download-backup') || client.commands.get('backup');
@@ -562,6 +589,18 @@ client.on('interactionCreate', async (interaction) => {
         interaction.options = { getString: () => gamerTag };
         const cmdName = action === 'deop' ? 'deop' : 'op';
         const cmd = client.commands.get(cmdName);
+        if (cmd) await cmd.execute(interaction, context);
+        return;
+      }
+
+      // Modal Enchant Instan Admin
+      if (interaction.customId === 'modal_admin_enchant') {
+        const gamerTag = interaction.fields.getTextInputValue('target_player').trim();
+        const rawType = (interaction.fields.getTextInputValue('enchant_type') || 'all').trim().toLowerCase();
+        interaction.options = {
+          getString: (name) => (name === 'pemain' ? gamerTag : rawType)
+        };
+        const cmd = client.commands.get('enchant-admin');
         if (cmd) await cmd.execute(interaction, context);
         return;
       }

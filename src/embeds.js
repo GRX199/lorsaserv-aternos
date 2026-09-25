@@ -257,13 +257,13 @@ function createAdminPanelEmbed(serverConfig, status, globalConfig) {
         inline: true
       },
       {
-        name: '🔍 Inspeksi Pemain',
-        value: '🎒 **Inventory** • 📍 **Koordinat**',
+        name: '🔍 Pemain & Alat',
+        value: '🎒 **Inventory** • 📍 **Koordinat** • 👑 **OP** • ✨ **Enchant**',
         inline: true
       },
       {
         name: '💾 Data & Manajemen',
-        value: '📥 **Backup ZIP** • ⚡ **CMD Konsol** • 🧹 **Clear Lag**',
+        value: '📥 **Backup ZIP** • ⚡ **CMD Konsol** • 🧹 **Clear Lag** • 🌍 **Render Map**',
         inline: false
       }
     )
@@ -298,7 +298,7 @@ function createAdminPanelButtons(isOnline = true, globalConfig = null) {
       .setStyle(ButtonStyle.Primary)
   );
 
-  // Baris 2: Pemantauan Pemain Real-Time
+  // Baris 2: Pemantauan & Fitur Pemain
   const rowInspect = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('btn_admin_inv')
@@ -314,7 +314,12 @@ function createAdminPanelButtons(isOnline = true, globalConfig = null) {
       .setCustomId('btn_admin_op')
       .setLabel('Kelola OP')
       .setEmoji('👑')
-      .setStyle(ButtonStyle.Secondary)
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId('btn_admin_enchant')
+      .setLabel('Enchant Instan')
+      .setEmoji('✨')
+      .setStyle(ButtonStyle.Success)
   );
 
   // Baris 3: Manajemen & Utilitas

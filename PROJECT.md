@@ -25,6 +25,7 @@ Dokumentasi lengkap proyek integrasi server Minecraft Bedrock Dedicated Server (
   - Endpoint `/health`: Healthcheck uptime untuk Render/VPS.
 - `src/playerLogMonitor.js`: Memantau file log BDS (`screenlog.0` / `server.log`) secara real-time untuk mencatat pemain yang join/leave dan update koordinat.
 - `src/backupManager.js`: Otomatisasi backup berkala world Bedrock ke arsip zip.
+- `src/commands/enchant_admin.js`: Panel admin Discord & Slash command `/enchant-admin` untuk memberikan max enchant instan ke item pemain secara langsung via konsol BDS.
 
 ### 2. Script Otomasi VPS (`*.sh`)
 - `render_world_map.sh`: Script otomatis pengunduh uNmINeD CLI, me-render LevelDB Bedrock menjadi tile peta web format PNG, dengan dukungan `--zoomin=2` dan kontrol prioritas CPU `nice -n 19`.
