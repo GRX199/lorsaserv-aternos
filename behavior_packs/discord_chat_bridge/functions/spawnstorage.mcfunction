@@ -1,0 +1,1 @@
+function admin/spawn_storage

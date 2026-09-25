@@ -26,6 +26,7 @@ Dokumentasi lengkap proyek integrasi server Minecraft Bedrock Dedicated Server (
 - `src/playerLogMonitor.js`: Memantau file log BDS (`screenlog.0` / `server.log`) secara real-time untuk mencatat pemain yang join/leave dan update koordinat.
 - `src/backupManager.js`: Otomatisasi backup berkala world Bedrock ke arsip zip.
 - `src/commands/enchant_admin.js`: Panel admin Discord & Slash command `/enchant-admin` untuk memberikan max enchant instan ke item pemain secara langsung via konsol BDS.
+- `src/commands/spawn_storage.js`: Slash command `/spawn-storage` untuk memunculkan struktur Gudang Otomatis (Auto Storage Golem 22x10x20) instan di server BDS.
 
 ### 2. Script Otomasi VPS (`*.sh`)
 - `render_world_map.sh`: Script otomatis pengunduh uNmINeD CLI, me-render LevelDB Bedrock menjadi tile peta web format PNG, dengan dukungan `--zoomin=2` dan kontrol prioritas CPU `nice -n 19`.

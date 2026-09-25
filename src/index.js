@@ -167,7 +167,7 @@ client.on('interactionCreate', async (interaction) => {
         'cmd', 'op', 'deop', 'stop-server', 'restart-server',
         'setup-status', 'setup-logs', 'setup-chat', 'setup-admin',
         'inventory', 'locate', 'download-backup', 'sync-name', 'render-map',
-        'enchant-admin'
+        'enchant-admin', 'spawn-storage'
       ];
 
       if (adminOnlyCommands.includes(interaction.commandName)) {
