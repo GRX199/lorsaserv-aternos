@@ -111,9 +111,32 @@ module.exports = {
       return;
     }
 
-    const rawPlayer = interaction.options.getString('pemain') || '';
-    const playerName = rawPlayer.trim().replace(/["'\\]/g, '');
-    const structKey = interaction.options.getString('struktur') || 'easyautostorage';
+    let rawPlayer = interaction.options.getString('pemain') || '';
+    let structKey = interaction.options.getString('struktur') || '';
+
+    // Deteksi jika user tidak sengaja paste seluruh teks parameter ke dalam opsi pemain
+    if (rawPlayer.includes('struktur:') || rawPlayer.includes('Iron Farm') || rawPlayer.includes('easy_ironfarm')) {
+      if (rawPlayer.toLowerCase().includes('iron')) {
+        structKey = structKey || 'easy_ironfarm';
+      } else if (rawPlayer.toLowerCase().includes('sugarcane')) {
+        structKey = structKey || 'sugarcane_farm';
+      } else if (rawPlayer.toLowerCase().includes('chicken')) {
+        structKey = structKey || 'chicken_farm';
+      } else if (rawPlayer.toLowerCase().includes('storage')) {
+        structKey = structKey || 'easyautostorage';
+      }
+      // Ambil hanya gamertag di awal teks
+      const match = rawPlayer.match(/^<?([A-Za-z0-9_ -]+?)>?(?:\s+struktur:|\s+x:|\s*$)/);
+      if (match) {
+        rawPlayer = match[1];
+      }
+    }
+
+    if (!structKey) {
+      structKey = 'easyautostorage';
+    }
+
+    const playerName = rawPlayer.trim().replace(/[<>"'\\]/g, '');
     const rotation = interaction.options.getString('rotasi') || '0_degrees';
     const posX = interaction.options.getInteger('x');
     const posY = interaction.options.getInteger('y');
