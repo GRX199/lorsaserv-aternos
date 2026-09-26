@@ -30,17 +30,19 @@ if [ -d "$WORLDS_DIR" ]; then
   done
 fi
 
-echo "[3/3] Me-reload Bot Discord di PM2 (Server Minecraft TETAP ONLINE)..."
+echo "[3/3] Memberikan izin file & me-restart server Bedrock (3 detik)..."
+chmod -R 755 "$BP_DIR/structures" "$WORLDS_DIR"/*/structures
+sudo systemctl restart minecraft-bedrock || true
 pm2 reload all || pm2 restart all || true
 
 echo "=========================================================="
-echo "  🎉 SELESAI! STRUKTUR SIAP DIMUNCULKAN TANPA RESTART!"
+echo "  🎉 SELESAI! SELURUH STRUKTUR SUDAH TER-INDEX OLEH BDS!"
 echo "=========================================================="
-echo "Server Minecraft TIDAK DIHENTIKAN dan pemain tetap bisa bermain."
+echo "Server Minecraft telah me-load ulang daftar cetak biru."
 echo ""
-echo "Perintah Discord:"
-echo "  /spawn-storage pemain:NamaAnda struktur:Easy Iron Farm"
-echo "  /spawn-storage pemain:NamaAnda struktur:Gudang Auto Storage Golem"
-echo "  /spawn-storage pemain:NamaAnda struktur:Auto Sugarcane Farm"
-echo "  /spawn-storage pemain:NamaAnda struktur:Auto Cooked Chicken Farm"
+echo "Perintah In-Game / Discord:"
+echo "  /structure load easy_ironfarm ~ ~ ~"
+echo "  /structure load easyautostorage ~ ~ ~"
+echo "  /structure load sugarcane_farm ~ ~ ~"
+echo "  /structure load chicken_farm ~ ~ ~"
 echo "=========================================================="
