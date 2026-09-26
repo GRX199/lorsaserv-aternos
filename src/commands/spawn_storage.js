@@ -159,8 +159,27 @@ module.exports = {
     const preset = STRUCTURE_PRESETS[structKey] || STRUCTURE_PRESETS.easyautostorage;
 
     try {
-      let spawnCmd = '';
-      let locationText = '';
+      // Auto-sinkronisasi file structure ke worlds/*/structures/ jika belum ada
+      try {
+        const fs = require('node:fs');
+        const path = require('node:path');
+        const homeDir = process.env.HOME || '/home/ubuntu';
+        const worldsDir = path.join(homeDir, 'bedrock-server', 'worlds');
+        const structSrc = path.join(__dirname, '..', '..', 'behavior_packs', 'discord_chat_bridge', 'structures', `${preset.file}.mcstructure`);
+        if (fs.existsSync(structSrc) && fs.existsSync(worldsDir)) {
+          const worlds = fs.readdirSync(worldsDir);
+          for (const w of worlds) {
+            const worldPath = path.join(worldsDir, w);
+            if (fs.existsSync(worldPath) && fs.statSync(worldPath).isDirectory()) {
+              const targetDir = path.join(worldPath, 'structures');
+              fs.mkdirSync(targetDir, { recursive: true });
+              fs.copyFileSync(structSrc, path.join(targetDir, `${preset.file}.mcstructure`));
+            }
+          }
+        }
+      } catch (syncErr) {
+        console.warn('[spawn-storage] Auto-sync structure warning:', syncErr.message);
+      }
 
       if (posX !== null && posY !== null && posZ !== null) {
         spawnCmd = `structure load ${preset.file} ${posX} ${posY} ${posZ} ${rotation}`;
