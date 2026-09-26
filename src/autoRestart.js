@@ -110,7 +110,7 @@ class AutoRestart {
       // Broadcast terakhir sebelum mati
       sendBroadcast('Server', '⚠️ Server sedang restart otomatis untuk pembersihan rutin. Mohon tunggu...');
 
-      const res = await restartServer();
+      const res = await restartServer({ immediate: true });
 
       if (this.statusManager) {
         await this.statusManager.updateStatusEmbed().catch(() => {});

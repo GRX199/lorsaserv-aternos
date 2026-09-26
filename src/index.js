@@ -392,12 +392,80 @@ client.on('interactionCreate', async (interaction) => {
           return;
         }
 
-        // 🔄 Restart Server
+        // 🔄 Restart Server (dengan Countdown 60 detik)
         if (interaction.customId === 'btn_admin_restart') {
           await interaction.deferReply({ ephemeral: true });
-          const { restartServer } = require('./serverController');
-          const res = await restartServer();
-          await interaction.editReply({ content: res.success ? `🔄 ${res.message}` : `⚠️ ${res.message}` });
+          const { restartServerWithCountdown, getCountdownState } = require('./serverController');
+          const currentState = getCountdownState();
+          if (currentState.active) {
+            await interaction.editReply({
+              content: `⚠️ **Hitung mundur restart sudah berjalan!** Tersisa **${currentState.secondsLeft} detik**.`,
+              components: [
+                new ActionRowBuilder().addComponents(
+                  new ButtonBuilder()
+                    .setCustomId('btn_cancel_restart')
+                    .setLabel('Batalkan Restart')
+                    .setStyle(ButtonStyle.Danger)
+                    .setEmoji('⛔'),
+                  new ButtonBuilder()
+                    .setCustomId('btn_force_restart')
+                    .setLabel('Restart Sekarang')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setEmoji('⚡')
+                )
+              ]
+            });
+            return;
+          }
+
+          const adminName = interaction.user.displayName || interaction.user.username;
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId('btn_cancel_restart')
+              .setLabel('Batalkan Restart')
+              .setStyle(ButtonStyle.Danger)
+              .setEmoji('⛔'),
+            new ButtonBuilder()
+              .setCustomId('btn_force_restart')
+              .setLabel('Restart Sekarang')
+              .setStyle(ButtonStyle.Secondary)
+              .setEmoji('⚡')
+          );
+
+          await interaction.editReply({
+            content: `⏱️ **Hitung mundur restart 60 detik telah dimulai!**\nPeringatan in-game (Title, Actionbar, Tellraw, Sound) telah disiarkan ke semua pemain.\nServer akan me-restart otomatis dalam 1 menit.`,
+            components: [row]
+          });
+
+          // Jalankan countdown
+          restartServerWithCountdown(60, { initiatedBy: adminName }).then(async (res) => {
+            if (statusManager) {
+              await statusManager.updateStatusEmbed().catch(() => {});
+            }
+          }).catch(console.error);
+          return;
+        }
+
+        // ⛔ Batalkan Restart
+        if (interaction.customId === 'btn_cancel_restart') {
+          await interaction.deferReply({ ephemeral: true });
+          const { cancelRestart } = require('./serverController');
+          const adminName = interaction.user.displayName || interaction.user.username;
+          const res = cancelRestart(adminName);
+          await interaction.editReply({ content: res.success ? `✅ **${res.message}**` : `ℹ️ ${res.message}` });
+          return;
+        }
+
+        // ⚡ Restart Instan (Lewati Countdown)
+        if (interaction.customId === 'btn_force_restart') {
+          await interaction.deferReply({ ephemeral: true });
+          const { cancelRestart, restartServer } = require('./serverController');
+          cancelRestart('Admin (Instan)');
+          const res = await restartServer({ immediate: true });
+          if (statusManager) {
+            await statusManager.updateStatusEmbed().catch(() => {});
+          }
+          await interaction.editReply({ content: res.success ? `⚡ **Server berhasil di-restart instan!**` : `⚠️ ${res.message}` });
           return;
         }
 

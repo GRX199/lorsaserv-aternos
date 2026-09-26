@@ -154,14 +154,178 @@ async function stopServer() {
   return { success: true, message: `Server Minecraft (${engine.service}) telah dimatikan.` };
 }
 
+const countdownState = {
+  active: false,
+  timer: null,
+  secondsLeft: 0,
+  totalSeconds: 60,
+  initiatedBy: 'Admin',
+  reason: '',
+  cancelRequested: false,
+  listeners: new Set()
+};
+
+function getCountdownState() {
+  return {
+    active: countdownState.active,
+    secondsLeft: countdownState.secondsLeft,
+    totalSeconds: countdownState.totalSeconds,
+    initiatedBy: countdownState.initiatedBy,
+    reason: countdownState.reason
+  };
+}
+
+function cancelRestart(cancelledBy = 'Admin') {
+  if (!countdownState.active) {
+    return { success: false, message: 'Tidak ada hitung mundur restart yang sedang berjalan.' };
+  }
+
+  countdownState.cancelRequested = true;
+  if (countdownState.timer) {
+    clearInterval(countdownState.timer);
+    countdownState.timer = null;
+  }
+  countdownState.active = false;
+
+  // Siarkan ke Minecraft in-game
+  sendConsoleCommand('title @a times 5 40 10');
+  sendConsoleCommand('title @a title §a§lRESTART DIBATALKAN');
+  sendConsoleCommand('title @a subtitle §eServer tetap berjalan normal.');
+  sendConsoleCommand(`tellraw @a {"rawtext":[{"text":"§a§l[INFO] §eHitung mundur restart dibatalkan oleh §f${cancelledBy}§e. Selamat bermain kembali!"}]}`);
+  sendConsoleCommand('playsound random.toast @a');
+
+  for (const listener of countdownState.listeners) {
+    try { listener({ event: 'cancelled', by: cancelledBy }); } catch {}
+  }
+  countdownState.listeners.clear();
+
+  return { success: true, message: `Hitung mundur restart berhasil dibatalkan oleh ${cancelledBy}.` };
+}
+
+function broadcastCountdownTick(s, reason = '') {
+  const reasonText = reason ? ` (${reason})` : '';
+
+  if (s === 60 || s === 120 || s === 180 || s === 300) {
+    const mins = Math.round(s / 60);
+    sendConsoleCommand('title @a times 10 70 20');
+    sendConsoleCommand('title @a title §c§lRESTART SERVER');
+    sendConsoleCommand(`title @a subtitle §eDalam ${mins} menit!${reasonText ? ' §7' + reason : ''}`);
+    sendConsoleCommand(`tellraw @a {"rawtext":[{"text":"§c§l[PERINGATAN] §eServer akan di-restart dalam §c${mins} menit§e${reasonText}! Mohon simpan barang & cari tempat aman."}]}`);
+    sendConsoleCommand('playsound random.levelup @a');
+  } else if (s === 45) {
+    sendConsoleCommand('tellraw @a {"rawtext":[{"text":"§6§l[RESTART] §eTersisa §c45 detik§e sebelum server di-restart!"}]}');
+    sendConsoleCommand('playsound note.bell @a');
+  } else if (s === 30) {
+    sendConsoleCommand('title @a times 5 40 10');
+    sendConsoleCommand('title @a actionbar §c§l⚠️ RESTART DALAM 30 DETIK!');
+    sendConsoleCommand('tellraw @a {"rawtext":[{"text":"§c§l[PERINGATAN] §eServer akan di-restart dalam §c30 detik§e! Mohon segera logout jika berada di tempat rawan."}]}');
+    sendConsoleCommand('playsound block.bell.hit @a');
+  } else if (s === 15) {
+    sendConsoleCommand('title @a actionbar §c§l⚠️ RESTART DALAM 15 DETIK!');
+    sendConsoleCommand('tellraw @a {"rawtext":[{"text":"§c§l[PERINGATAN] §eServer akan di-restart dalam §c15 detik§e!"}]}');
+    sendConsoleCommand('playsound note.bell @a');
+  } else if (s === 10) {
+    sendConsoleCommand('title @a times 5 25 5');
+    sendConsoleCommand('title @a title §c§l10 DETIK');
+    sendConsoleCommand('title @a subtitle §eBersiap log out...');
+    sendConsoleCommand('playsound random.orb @a');
+  } else if (s >= 1 && s <= 5) {
+    sendConsoleCommand('title @a times 0 25 5');
+    sendConsoleCommand(`title @a title §c§l${s}`);
+    sendConsoleCommand('title @a subtitle §eRestarting...');
+    sendConsoleCommand('playsound random.click @a');
+  }
+}
+
 /**
- * Restart server Minecraft di VPS
+ * Restart server dengan hitung mundur dan notifikasi in-game (default 60 detik)
  */
-async function restartServer() {
+async function restartServerWithCountdown(seconds = 60, options = {}) {
   if (process.platform === 'win32') {
     return { success: false, message: 'Kontrol server hanya tersedia di VPS Linux.' };
   }
 
+  const check = await isServerRunning();
+  if (!check.running) {
+    return { success: false, message: 'Server Minecraft sedang offline, silakan nyalakan server terlebih dahulu.' };
+  }
+
+  if (countdownState.active) {
+    return {
+      success: false,
+      message: `Restart sedang dalam proses hitung mundur (${countdownState.secondsLeft} detik tersisa)!`,
+      secondsLeft: countdownState.secondsLeft,
+      active: true
+    };
+  }
+
+  const duration = Math.max(0, parseInt(seconds, 10) || 60);
+  const initiatedBy = options.initiatedBy || 'Admin';
+  const reason = options.reason || '';
+
+  // Jika durasi 0, langsung eksekusi instan
+  if (duration === 0) {
+    sendConsoleCommand('title @a title §c§lRESTARTING NOW...');
+    sendConsoleCommand('tellraw @a {"rawtext":[{"text":"§c§l[SERVER] §eServer sedang di-restart instan oleh Admin..."}]}');
+    sendConsoleCommand('save hold');
+    await new Promise(r => setTimeout(r, 1200));
+    return await executeRestartDirect();
+  }
+
+  countdownState.active = true;
+  countdownState.secondsLeft = duration;
+  countdownState.totalSeconds = duration;
+  countdownState.initiatedBy = initiatedBy;
+  countdownState.reason = reason;
+  countdownState.cancelRequested = false;
+
+  // Siarkan pengumuman awal
+  broadcastCountdownTick(duration, reason);
+
+  return new Promise((resolve) => {
+    countdownState.timer = setInterval(async () => {
+      if (countdownState.cancelRequested) {
+        clearInterval(countdownState.timer);
+        countdownState.timer = null;
+        resolve({ success: false, cancelled: true, message: 'Restart dibatalkan.' });
+        return;
+      }
+
+      countdownState.secondsLeft -= 1;
+      const s = countdownState.secondsLeft;
+
+      if (options.onTick) {
+        try { options.onTick(s); } catch {}
+      }
+
+      broadcastCountdownTick(s, reason);
+
+      if (s <= 0) {
+        clearInterval(countdownState.timer);
+        countdownState.timer = null;
+        countdownState.active = false;
+
+        // Simpan dunia dan eksekusi restart
+        sendConsoleCommand('title @a title §4§lRESTARTING NOW');
+        sendConsoleCommand('title @a subtitle §eMenyimpan data dunia...');
+        sendConsoleCommand('tellraw @a {"rawtext":[{"text":"§a§l[SERVER] §eMenyimpan data dunia dan me-restart server. Silakan bergabung kembali sesaat lagi!"}]}');
+        sendConsoleCommand('save hold');
+
+        await new Promise(r => setTimeout(r, 2000));
+        const res = await executeRestartDirect();
+        resolve(res);
+      }
+    }, 1000);
+  });
+}
+
+/**
+ * Eksekusi restart langsung ke systemctl tanpa countdown
+ */
+async function executeRestartDirect() {
+  if (process.platform === 'win32') {
+    return { success: false, message: 'Kontrol server hanya tersedia di VPS Linux.' };
+  }
   const engine = await getActiveEngine();
   const res = await runShell(`sudo systemctl restart ${engine.service}`);
   if (res.success) {
@@ -169,6 +333,18 @@ async function restartServer() {
   } else {
     return { success: false, message: `Gagal restart server: ${res.stderr || res.error}` };
   }
+}
+
+/**
+ * Restart server Minecraft di VPS (default hitung mundur 60 detik)
+ */
+async function restartServer(options = {}) {
+  const isImmediate = options === true || options?.immediate === true || options?.countdown === 0;
+  if (isImmediate) {
+    return await executeRestartDirect();
+  }
+  const seconds = typeof options?.countdown === 'number' ? options.countdown : 60;
+  return await restartServerWithCountdown(seconds, options);
 }
 
 /**
@@ -259,6 +435,10 @@ module.exports = {
   startServer,
   stopServer,
   restartServer,
+  restartServerWithCountdown,
+  cancelRestart,
+  getCountdownState,
+  executeRestartDirect,
   getActiveEngine,
   getActiveScreenSession,
   sendConsoleCommand,
