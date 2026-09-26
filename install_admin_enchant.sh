@@ -28,8 +28,8 @@ if [ -d "$WORLDS_DIR" ]; then
   for world in "$WORLDS_DIR"/*; do
     if [ -d "$world" ]; then
       mkdir -p "$world/structures"
-      cp -f "$SCRIPT_DIR/behavior_packs/discord_chat_bridge/structures/easyautostorage.mcstructure" "$world/structures/"
-      echo "  -> Cetak biru disalin ke $world/structures/"
+      cp -rf "$SCRIPT_DIR/behavior_packs/discord_chat_bridge/structures/"* "$world/structures/"
+      echo "  -> Seluruh cetak biru farm & storage disalin ke $world/structures/"
     fi
   done
 fi
