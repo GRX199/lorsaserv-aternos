@@ -34,6 +34,17 @@ const STRUCTURE_PRESETS = {
       '• Telur ayam otomatis disalurkan ke **Dispenser** dan ditembakkan ke atas half-slab.',
       '• Begitu anak ayam tumbuh menjadi ayam dewasa, kepalanya menyentuh lava, langsung matang terpanggang menjadi **Cooked Chicken** dan masuk ke peti penyimpanan!'
     ].join('\n')
+  },
+  easy_ironfarm: {
+    name: 'Easy Iron Farm (Farm Besi)',
+    file: 'easy_ironfarm',
+    size: '23 x 9 x 23 blok',
+    color: 0xE74C3C,
+    guide: [
+      '• Memuat seluruh sistem Iron Farm otomatis lengkap dengan Villager & platform pembunuh Golem.',
+      '• Iron Golem spawn di atas platform air, dialirkan ke bilah lava, dan menghasilkan Iron Ingot tanpa batas.',
+      '• Besi dan bunga Poppy otomatis terserap masuk ke deretan peti di bagian bawah!'
+    ].join('\n')
   }
 };
 
@@ -53,6 +64,7 @@ module.exports = {
         .setRequired(false)
         .addChoices(
           { name: '📦 Gudang Auto Storage Golem (22x10x20)', value: 'easyautostorage' },
+          { name: '🛡️ Easy Iron Farm - Besi Tak Terbatas (23x9x23)', value: 'easy_ironfarm' },
           { name: '🎋 Auto Sugarcane Farm (8x5x5)', value: 'sugarcane_farm' },
           { name: '🍗 Auto Cooked Chicken Farm (3x5x4)', value: 'chicken_farm' }
         )
