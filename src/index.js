@@ -552,6 +552,51 @@ client.on('interactionCreate', async (interaction) => {
           return;
         }
 
+        // 🌀 Titik Warp & Teleportasi Admin (Buka Modal)
+        if (interaction.customId === 'btn_admin_warp') {
+          const modal = new ModalBuilder()
+            .setCustomId('modal_admin_warp')
+            .setTitle('🌀 Titik Warp & Teleportasi Admin');
+
+          const actionInput = new TextInputBuilder()
+            .setCustomId('warp_action')
+            .setLabel('Tindakan (tp / set / hapus / list)')
+            .setPlaceholder('tp, set, hapus, atau list')
+            .setValue('tp')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
+          const nameInput = new TextInputBuilder()
+            .setCustomId('warp_name')
+            .setLabel('Nama Titik Warp')
+            .setPlaceholder('Contoh: ironfarm, spawn, gudang, base')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false);
+
+          const playerInput = new TextInputBuilder()
+            .setCustomId('target_player')
+            .setLabel('Gamertag Pemain (yang di-TP / acuan posisi)')
+            .setPlaceholder('Contoh: Steve')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false);
+
+          const coordsInput = new TextInputBuilder()
+            .setCustomId('coords_manual')
+            .setLabel('Koordinat X Y Z manual (Khusus set baru)')
+            .setPlaceholder('Contoh: -351 11 -1111')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false);
+
+          modal.addComponents(
+            new ActionRowBuilder().addComponents(actionInput),
+            new ActionRowBuilder().addComponents(nameInput),
+            new ActionRowBuilder().addComponents(playerInput),
+            new ActionRowBuilder().addComponents(coordsInput)
+          );
+          await interaction.showModal(modal);
+          return;
+        }
+
         // 📥 Unduh Backup Dunia
         if (interaction.customId === 'btn_admin_backup') {
           const backupCmd = client.commands.get('download-backup') || client.commands.get('backup');
@@ -669,6 +714,46 @@ client.on('interactionCreate', async (interaction) => {
           getString: (name) => (name === 'pemain' ? gamerTag : rawType)
         };
         const cmd = client.commands.get('enchant-admin');
+        if (cmd) await cmd.execute(interaction, context);
+        return;
+      }
+
+      // Modal Titik Warp & Teleportasi Admin
+      if (interaction.customId === 'modal_admin_warp') {
+        const action = interaction.fields.getTextInputValue('warp_action').trim().toLowerCase();
+        const name = interaction.fields.getTextInputValue('warp_name')?.trim();
+        const player = interaction.fields.getTextInputValue('target_player')?.trim();
+        const coordsRaw = interaction.fields.getTextInputValue('coords_manual')?.trim();
+
+        let posX = null;
+        let posY = null;
+        let posZ = null;
+
+        if (coordsRaw) {
+          const parts = coordsRaw.split(/\s+/);
+          if (parts.length >= 3) {
+            posX = parseInt(parts[0], 10);
+            posY = parseInt(parts[1], 10);
+            posZ = parseInt(parts[2], 10);
+          }
+        }
+
+        interaction.options = {
+          getSubcommand: () => action,
+          getString: (optName) => {
+            if (optName === 'nama') return name;
+            if (optName === 'pemain') return player;
+            return null;
+          },
+          getInteger: (optName) => {
+            if (optName === 'x') return posX;
+            if (optName === 'y') return posY;
+            if (optName === 'z') return posZ;
+            return null;
+          }
+        };
+
+        const cmd = client.commands.get('warp');
         if (cmd) await cmd.execute(interaction, context);
         return;
       }

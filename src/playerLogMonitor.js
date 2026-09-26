@@ -271,6 +271,45 @@ class PlayerLogMonitor {
       return;
     }
 
+    // 0.9. Deteksi Event Simpan/Hapus Warp dari Script In-Game: [WARP_SET] & [WARP_DEL]
+    if (line.includes('[WARP_SET]')) {
+      const idx = line.indexOf('[WARP_SET]');
+      let jsonStr = line.substring(idx + 10).trim();
+      const startJson = jsonStr.indexOf('{');
+      const endJson = jsonStr.lastIndexOf('}');
+      if (startJson !== -1 && endJson !== -1) {
+        jsonStr = jsonStr.substring(startJson, endJson + 1);
+      }
+      try {
+        const data = JSON.parse(jsonStr);
+        const { warpManager } = require('./warpManager');
+        warpManager.setWarp(data.name, data);
+        console.log(`[PlayerLogMonitor] Titik warp '${data.name}' berhasil disinkronkan dari in-game oleh ${data.by || 'Admin'}`);
+      } catch (err) {
+        console.warn('[PlayerLogMonitor] Gagal parse [WARP_SET]:', err.message);
+      }
+      return;
+    }
+
+    if (line.includes('[WARP_DEL]')) {
+      const idx = line.indexOf('[WARP_DEL]');
+      let jsonStr = line.substring(idx + 10).trim();
+      const startJson = jsonStr.indexOf('{');
+      const endJson = jsonStr.lastIndexOf('}');
+      if (startJson !== -1 && endJson !== -1) {
+        jsonStr = jsonStr.substring(startJson, endJson + 1);
+      }
+      try {
+        const data = JSON.parse(jsonStr);
+        const { warpManager } = require('./warpManager');
+        warpManager.deleteWarp(data.name);
+        console.log(`[PlayerLogMonitor] Titik warp '${data.name}' berhasil dihapus via in-game oleh ${data.by || 'Admin'}`);
+      } catch (err) {
+        console.warn('[PlayerLogMonitor] Gagal parse [WARP_DEL]:', err.message);
+      }
+      return;
+    }
+
     // 1. Teruskan baris log ke buffer streaming Discord channel
     this.forwardLogToChannel(line);
 

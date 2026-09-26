@@ -63,6 +63,31 @@ Sistem ini memastikan pemain di server tidak terputus mendadak atau kehilangan i
 
 ---
 
+## 🌀 Sistem Titik Warp & Teleportasi Instan (Khusus OP / Admin)
+
+Fitur ini memberikan kemampuan membuat titik warp koordinat dan teleportasi instan yang **hanya bisa diakses oleh Operator (OP) atau pemain bertag `admin`**:
+
+1. **Perintah In-Game Chat (Khusus OP / Tag 'admin')**:
+   - `!setwarp <nama>`: Menyimpan titik berdiri saat ini sebagai titik warp baru (disimpan permanen di LevelDB & disinkronkan ke bot).
+   - `!warp <nama>`: Teleport seketika ke titik warp tersebut.
+   - `!warp <nama> <player>`: Teleport pemain lain ke titik warp tersebut.
+   - `!delwarp <nama>`: Menghapus titik warp yang sudah ada.
+   - `!warplist` / `!warps`: Menampilkan daftar seluruh titik warp beserta koordinat dan dimensinya.
+   - `!tpto <player>`: Teleport diri sendiri langsung ke posisi pemain lain.
+   - `!tphere <player>`: Menarik pemain lain langsung ke posisi berdiri Admin.
+   - `!tp <player1> <player2>` atau `!tp <x> <y> <z>`: Teleportasi bebas.
+   - **Perlindungan Akses**: Jika pemain biasa (bukan OP/Admin) mencoba mengetik perintah di atas, perintah otomatis dibatalkan, pesan ditolak (`§c[DITOLAK] Perintah ini khusus untuk OP atau Admin server!`), dan efek suara bass dibunyikan.
+
+2. **Perintah Discord Bot (Khusus Administrator)**:
+   - `/warp tp nama:<nama> pemain:<gamertag>`: Teleport pemain dari Discord.
+   - `/warp set nama:<nama> [pemain:<gamertag>] [x: y: z:]`: Buat warp dari Discord (bisa otomatis mengambil koordinat live pemain online!).
+   - `/warp hapus nama:<nama>`: Hapus titik warp dari database.
+   - `/warp list`: Tampilkan embed daftar titik warp lengkap.
+   - `/tp pemain:<nama> [target_pemain:<nama>] [x: y: z:]`: Teleport instan via Discord.
+   - Tombol **`[🌀 Titik Warp & TP]`** pada Admin Control Panel (`/setup-admin`).
+
+---
+
 ## 🛠️ Perintah Berguna di VPS
 
 ```bash

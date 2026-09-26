@@ -319,7 +319,12 @@ function createAdminPanelButtons(isOnline = true, globalConfig = null) {
       .setCustomId('btn_admin_enchant')
       .setLabel('Enchant Instan')
       .setEmoji('✨')
-      .setStyle(ButtonStyle.Success)
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId('btn_admin_warp')
+      .setLabel('Titik Warp & TP')
+      .setEmoji('🌀')
+      .setStyle(ButtonStyle.Primary)
   );
 
   // Baris 3: Manajemen & Utilitas
