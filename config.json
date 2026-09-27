@@ -27,8 +27,9 @@
   "chatBridgeChannelId": "",
   "backup": {
     "enabled": true,
-    "intervalHours": 6,
-    "maxRetention": 8,
+    "intervalHours": 1,
+    "maxRetention": 24,
+    "notifyOnScheduled": false,
     "channelId": ""
   },
   "autoRestart": {

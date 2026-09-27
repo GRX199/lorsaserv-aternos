@@ -14,7 +14,7 @@ class BackupManager {
     this.paperDir = process.env.PAPER_DIR || path.join(homeDir, 'papermc-server');
     this.worldsDir = path.join(this.bedrockDir, 'worlds');
     this.backupsDir = process.env.BACKUPS_DIR || path.join(homeDir, 'minecraft-backups');
-    this.maxRetention = this.config.backup?.maxRetention || 8; // Simpan 8 backup terakhir (2 hari @ interval 6 jam)
+    this.maxRetention = this.config.backup?.maxRetention || 24; // Simpan 24 backup terakhir (1 hari @ interval 1 jam)
   }
 
   start() {
@@ -24,7 +24,7 @@ class BackupManager {
       return;
     }
 
-    const intervalHours = this.config.backup?.intervalHours || 6;
+    const intervalHours = this.config.backup?.intervalHours || 1;
     const intervalMs = intervalHours * 60 * 60 * 1000;
 
     console.log(`[BackupManager] Auto-backup aktif setiap ${intervalHours} jam (Folder: ${this.backupsDir})`);
@@ -52,13 +52,14 @@ class BackupManager {
   }
 
   /**
-   * Menjalankan backup otomatis berkala dan memberi tahu Discord
+   * Menjalankan backup otomatis berkala (tanpa spam notifikasi jika dinonaktifkan)
    */
   async runScheduledBackup() {
-    console.log('[BackupManager] Memulai auto-backup terjadwal (interval 6 jam)...');
+    const interval = this.config.backup?.intervalHours || 1;
+    console.log(`[BackupManager] Memulai auto-backup terjadwal (interval ${interval} jam)...`);
     try {
       const res = await this.createBackup(false);
-      if (res.success) {
+      if (res.success && this.config.backup?.notifyOnScheduled === true) {
         await this.notifyBackupDiscord(res);
       }
     } catch (err) {
