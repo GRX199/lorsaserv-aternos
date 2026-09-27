@@ -88,6 +88,34 @@ Fitur ini memberikan kemampuan membuat titik warp koordinat dan teleportasi inst
 
 ---
 
+## 🏷️ Sistem Floating NameTag Darah (Gaya Simple)
+
+Fitur ini menampilkan sisa darah (Health Points / HP) setiap pemain tepat di bawah nama mereka dengan gaya yang bersih, minimalis, dan mudah dibaca:
+
+1. **Format Tampilan (Simple & Clean)**:
+   ```text
+   <Nama Pemain>
+   ❤ 20/20
+   ```
+   - **Baris 1**: Nama pemain murni tanpa embel-embel berlebihan.
+   - **Baris 2**: Ikon hati `❤` dan angka darah real-time (contoh: `❤ 20/20`).
+   - **Pewarnaan Dinamis**:
+     - 🟢 **Hijau (`§a`)**: HP sehat / tinggi (> 75%).
+     - 🟡 **Kuning (`§e`)**: HP terluka (51% - 75%).
+     - 🟠 **Oranye (`§6`)**: HP sekarat (26% - 50%).
+     - 🔴 **Merah (`§c`)**: HP kritis (≤ 25%).
+     - 🟡 **Emas (`§6`)**: Tambahan hati dari Golden Apple / Absorption (> 20 HP).
+
+2. **Performa & Reaktivitas**:
+   - Berjalan pada interval ringan (10 ticks / 0.5 detik).
+   - Terintegrasi dengan event `entityHurt` dan `playerSpawn` sehingga darah langsung berubah seketika saat terkena serangan atau respawn.
+
+3. **Kontrol On/Off**:
+   - **In-Game Chat**: `!nametag on` atau `!nametag off` (Khusus Admin/OP), atau `!nametag` untuk cek status.
+   - **Discord Slash Command**: `/nametag aktif: True/False` (Khusus Administrator).
+
+---
+
 ## 🛠️ Perintah Berguna di VPS
 
 ```bash
