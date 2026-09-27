@@ -73,6 +73,7 @@ sed -i 's/^view-distance=.*/view-distance=10/' server.properties
 sed -i 's/^tick-distance=.*/tick-distance=4/' server.properties
 sed -i 's/^max-players=.*/max-players=10/' server.properties
 sed -i 's/^max-threads=.*/max-threads=4/' server.properties
+sed -i 's/^difficulty=.*/difficulty=hard/' server.properties
 
 # Pastikan protokol transport menggunakan raknet agar kompatibel dengan UDP port forwarding & direct client connect
 if grep -q "^transport=" server.properties; then
