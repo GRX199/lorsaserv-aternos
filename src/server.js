@@ -186,14 +186,13 @@ function startHealthServer(port = 3000, getStatusCallback, config, getStatusMana
           const pz = Math.round(p.z ?? 0);
 
           if (isOnline) {
-            const hpBadge = (p.health !== undefined && p.health !== null) ? ` (❤ ${p.health}/${p.maxHealth || 20})` : '';
             onlineMarkers.push({
               x: px,
               z: pz,
               image: skin.headUrl,
               imageAnchor: [0.5, 0.5],
               imageScale: 0.36,
-              text: `● ${p.name}${hpBadge}`,
+              text: `● ${p.name}`,
               textColor: '#22c55e',
               offsetX: 0,
               offsetY: 18,
