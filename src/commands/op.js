@@ -33,6 +33,11 @@ module.exports = {
         throw new Error(res.error || 'Sesi screen tidak ditemukan');
       }
 
+      // Sinkronkan tag admin/op in-game
+      sendConsoleCommand(`tag "${playerName}" add op`);
+      sendConsoleCommand(`tag "${playerName}" add admin`);
+      sendConsoleCommand(`scriptevent bot:admin add ${playerName}`);
+
       const embed = new EmbedBuilder()
         .setColor('#F1C40F')
         .setTitle('👑 Operator Berhasil Diberikan!')

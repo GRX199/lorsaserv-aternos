@@ -365,6 +365,29 @@ function sendConsoleCommand(cmd) {
   if (cleanCmd.startsWith('/')) {
     cleanCmd = cleanCmd.substring(1).trim();
   }
+
+  // Jika server Bedrock dan menerima perintah bot/admin (misal !nametag atau !warp)
+  if (isBedrock) {
+    if (/^!?nametag\s+on$/i.test(cleanCmd)) {
+      cleanCmd = 'scriptevent bot:nametag on';
+    } else if (/^!?nametag\s+off$/i.test(cleanCmd)) {
+      cleanCmd = 'scriptevent bot:nametag off';
+    } else if (/^!?nametag$/i.test(cleanCmd)) {
+      cleanCmd = 'scriptevent bot:nametag status';
+    } else if (/^!?warp\b/i.test(cleanCmd)) {
+      const rest = cleanCmd.replace(/^!?warp\s*/i, '').trim();
+      cleanCmd = `scriptevent bot:cmd !warp ${rest}`;
+    } else if (/^!?setwarp\b/i.test(cleanCmd)) {
+      const rest = cleanCmd.replace(/^!?setwarp\s*/i, '').trim();
+      cleanCmd = `scriptevent bot:cmd !setwarp ${rest}`;
+    } else if (/^!?delwarp\b/i.test(cleanCmd)) {
+      const rest = cleanCmd.replace(/^!?delwarp\s*/i, '').trim();
+      cleanCmd = `scriptevent bot:cmd !delwarp ${rest}`;
+    } else if (cleanCmd.startsWith('!')) {
+      cleanCmd = `scriptevent bot:cmd ${cleanCmd}`;
+    }
+  }
+
   const escaped = cleanCmd.replace(/"/g, '\\"');
 
   try {

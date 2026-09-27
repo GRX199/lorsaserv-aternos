@@ -111,9 +111,11 @@ Fitur ini menampilkan nama dan sisa darah (Health Points / HP) setiap **pemain d
    - **Optimasi Radius Pintar**: Hanya memperbarui entitas dalam radius pandang pemain aktif (36 blok), sehingga server hemat memori dan CPU (0% overhead saat server kosong).
    - Filter otomatis mengecualikan item jatuh, panah, xp orb, boat, dan armor stand agar tampilan dunia tetap rapi.
 
-3. **Kontrol On/Off**:
-   - **In-Game Chat**: `!nametag on` atau `!nametag off` (Khusus Admin/OP), atau `!nametag` untuk cek status.
+3. **Kontrol On/Off (In-Game, Discord & Konsol)**:
+   - **In-Game Chat**: `!nametag on` atau `!nametag off` (Khusus Operator / Admin), atau `!nametag` untuk cek status.
    - **Discord Slash Command**: `/nametag aktif: True/False` (Khusus Administrator).
+   - **Konsol Server / Screen BDS / Discord `/cmd`**: Mendukung perintah langsung `!nametag on` / `!nametag off` atau `scriptevent bot:nametag on/off`.
+   - **Manajemen Admin In-Game**: `!admin add <player>`, `!admin del <player>`, `!admin list`.
 
 ---
 

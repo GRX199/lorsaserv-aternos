@@ -33,6 +33,11 @@ module.exports = {
         throw new Error(res.error || 'Sesi screen tidak ditemukan');
       }
 
+      // Hapus tag admin/op in-game
+      sendConsoleCommand(`tag "${playerName}" remove op`);
+      sendConsoleCommand(`tag "${playerName}" remove admin`);
+      sendConsoleCommand(`scriptevent bot:admin del ${playerName}`);
+
       const embed = new EmbedBuilder()
         .setColor('#E74C3C')
         .setTitle('🚫 Status Operator Dicabut')

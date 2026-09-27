@@ -36,22 +36,105 @@ function saveAllWarpsDynamic(warps) {
   }
 }
 
-// Cek hak akses: hanya OP atau pemain dengan tag 'admin' / 'op'
+// Helper daftar admin yang tersimpan di Dynamic Properties
+function getAdminPlayers() {
+  try {
+    const raw = world.getDynamicProperty("admin_players");
+    if (raw && typeof raw === "string") {
+      const list = JSON.parse(raw);
+      if (Array.isArray(list)) return list;
+    }
+  } catch {}
+  return [];
+}
+
+function addAdminPlayer(name) {
+  if (!name) return;
+  try {
+    const list = getAdminPlayers();
+    const cleanName = name.trim();
+    if (!list.some(n => n.toLowerCase() === cleanName.toLowerCase())) {
+      list.push(cleanName);
+      world.setDynamicProperty("admin_players", JSON.stringify(list));
+    }
+    for (const p of world.getPlayers()) {
+      if (p.name.toLowerCase() === cleanName.toLowerCase()) {
+        try { p.addTag("admin"); p.addTag("op"); } catch {}
+      }
+    }
+    console.warn(`[ADMIN_SYNC] Berhasil menambahkan ${cleanName} ke daftar Admin.`);
+  } catch (err) {
+    console.warn(`[Scripting Error addAdminPlayer] ${err.message}`);
+  }
+}
+
+function removeAdminPlayer(name) {
+  if (!name) return;
+  try {
+    let list = getAdminPlayers();
+    const cleanName = name.trim().toLowerCase();
+    list = list.filter(n => n.toLowerCase() !== cleanName);
+    world.setDynamicProperty("admin_players", JSON.stringify(list));
+    for (const p of world.getPlayers()) {
+      if (p.name.toLowerCase() === cleanName) {
+        try { p.removeTag("admin"); p.removeTag("op"); } catch {}
+      }
+    }
+    console.warn(`[ADMIN_SYNC] Berhasil menghapus ${cleanName} dari daftar Admin.`);
+  } catch (err) {
+    console.warn(`[Scripting Error removeAdminPlayer] ${err.message}`);
+  }
+}
+
+// Cek hak akses secara sinkron (cek tag atau daftar admin)
 function isPlayerAdmin(player) {
   if (!player) return false;
   try {
-    if (typeof player.isOp === "function" && player.isOp()) return true;
-    if (typeof player.hasTag === "function" && (player.hasTag("admin") || player.hasTag("op"))) return true;
+    if (typeof player.isValid === "function" && !player.isValid()) return false;
   } catch {}
+
+  // 1. Tag entity Minecraft
+  try {
+    if (player.hasTag("admin") || player.hasTag("op")) return true;
+  } catch {}
+
+  // 2. Daftar admin tersimpan
+  try {
+    const list = getAdminPlayers();
+    const pName = (player.name || "").toLowerCase();
+    if (list.some(n => n.toLowerCase() === pName)) return true;
+  } catch {}
+
   return false;
+}
+
+// Cek hak akses secara asinkron dengan verifikasi query command jika belum bertag
+async function isPlayerAdminAsync(player) {
+  if (!player) return false;
+  if (isPlayerAdmin(player)) return true;
+
+  // 3. Verifikasi hak Operator in-game secara nyata via command query (tanpa efek samping)
+  // Perintah 'gamerule showcoordinates' hanya diizinkan untuk Operator di Bedrock Dedicated Server!
+  try {
+    await player.runCommandAsync("gamerule showcoordinates");
+    // Jika sukses tanpa error, pemain 100% adalah Operator di BDS!
+    try {
+      player.addTag("admin");
+      player.addTag("op");
+    } catch {}
+    return true;
+  } catch (permErr) {
+    // Member biasa (bukan OP) akan melempar error izin
+    return false;
+  }
 }
 
 // Pelacak posisi pemain berkala & catatan riwayat titik kematian
 const lastPlayerPositions = new Map();
 const lastDeathPositions = new Map();
 
-// Handler Perintah Chat In-Game (!deathpos, !setwarp, !warp, !delwarp, !warplist, !tp, !tpto, !tphere)
-function handleAdminChatCommand(sender, rawMessage) {
+// Handler Perintah Chat In-Game (!deathpos, !nametag, !setwarp, !warp, !delwarp, !warplist, !tp, !tpto, !tphere)
+async function handleAdminChatCommand(sender, rawMessage) {
   if (!sender) return false;
   const message = (rawMessage || "").trim();
   if (!message.startsWith("!")) return false;
@@ -65,14 +148,15 @@ function handleAdminChatCommand(sender, rawMessage) {
   // Perintah Publik: !deathpos / !lastdeath / !titikmati (Bisa digunakan oleh semua member)
   if (cmd === "deathpos" || cmd === "lastdeath" || cmd === "titikmati") {
     let targetName = sender.name;
-    if (arg1 && isPlayerAdmin(sender)) {
+    const isAdmin = await isPlayerAdminAsync(sender);
+    if (arg1 && isAdmin) {
       targetName = arg1;
     }
     const death = lastDeathPositions.get(targetName.toLowerCase());
     if (death) {
       const dimLabel = death.dim === "nether" ? "The Nether" : death.dim === "the_end" ? "The End" : "Overworld";
       sender.sendMessage(`§c§l[TITIK KEMATIAN] §r§ePemain §f${targetName} §egugur di: §aX:${death.x} Y:${death.y} Z:${death.z} §7(${dimLabel})`);
-      if (isPlayerAdmin(sender)) {
+      if (isAdmin) {
         sender.sendMessage(`§7Ketik: §f!tp ${death.x} ${death.y} ${death.z} §7untuk teleportasi ke sana.`);
       }
     } else {
@@ -81,21 +165,29 @@ function handleAdminChatCommand(sender, rawMessage) {
     return true;
   }
 
-  // Perintah Nametag Simple: !nametag [on|off]
+  // Info Nametag: !nametag tanpa argumen bisa dicek oleh semua pemain
+  if ((cmd === "nametag" || cmd === "nametagdarah") && !arg1) {
+    const status = isNametagEnabled() ? "§aAktif" : "§cNonaktif";
+    sender.sendMessage(`§e[NAMETAG] Status Floating NameTag Darah: ${status}`);
+    const isAdmin = await isPlayerAdminAsync(sender);
+    if (isAdmin) {
+      sender.sendMessage("§7Gunakan: §f!nametag on §7atau §f!nametag off §7untuk mengubah.");
+    }
+    return true;
+  }
+
+  // Verifikasi Izin Operator / Admin
+  const isAdmin = await isPlayerAdminAsync(sender);
+  if (!isAdmin) {
+    sender.sendMessage("§c§l[DITOLAK] §r§cPerintah ini khusus untuk OP atau Admin server!");
+    try { sender.runCommandAsync("playsound note.bass @s"); } catch {}
+    return true;
+  }
+
+  // === DARI SINI SEMUA PERINTAH KHUSUS OP / ADMIN ===
+
+  // 1. !nametag [on|off]
   if (cmd === "nametag" || cmd === "nametagdarah") {
-    if (!arg1) {
-      const status = isNametagEnabled() ? "§aAktif" : "§cNonaktif";
-      sender.sendMessage(`§e[NAMETAG] Status Floating NameTag Darah: ${status}`);
-      if (isPlayerAdmin(sender)) {
-        sender.sendMessage("§7Gunakan: §f!nametag on §7atau §f!nametag off §7untuk mengubah.");
-      }
-      return true;
-    }
-    if (!isPlayerAdmin(sender)) {
-      sender.sendMessage("§c§l[DITOLAK] §r§cPerintah ini khusus untuk OP atau Admin server!");
-      try { sender.runCommandAsync("playsound note.bass @s"); } catch {}
-      return true;
-    }
     if (arg1 === "off" || arg1 === "mati" || arg1 === "disable") {
       disableAllNametags();
       sender.sendMessage("§e[NAMETAG] Floating NameTag darah (Pemain & Mob) dinonaktifkan.");
@@ -106,11 +198,23 @@ function handleAdminChatCommand(sender, rawMessage) {
     return true;
   }
 
-  // Verifikasi Izin: Jika bukan Admin/OP, tolak mentah-mentah untuk perintah berikutnya
-  if (!isPlayerAdmin(sender)) {
-    sender.sendMessage("§c§l[DITOLAK] §r§cPerintah warp/teleport ini khusus untuk OP atau Admin server!");
-    try { sender.runCommandAsync("playsound note.bass @s"); } catch {}
-    return true;
+  // 2. !admin / !op
+  if (cmd === "admin" || cmd === "op") {
+    if (arg1 === "add" && arg2) {
+      const target = arg2.trim();
+      addAdminPlayer(target);
+      sender.sendMessage(`§a[ADMIN] Pemain §e${target} §aberhasil ditambahkan ke daftar Admin.`);
+      return true;
+    } else if ((arg1 === "del" || arg1 === "remove") && arg2) {
+      const target = arg2.trim();
+      removeAdminPlayer(target);
+      sender.sendMessage(`§e[ADMIN] Pemain §f${target} §edihapus dari daftar Admin.`);
+      return true;
+    } else if (arg1 === "list") {
+      const list = getAdminPlayers();
+      sender.sendMessage(`§b[ADMIN LIST] §f${list.join(", ") || "(Hanya Operator Server)"}`);
+      return true;
+    }
   }
 
   const warps = getAllWarpsDynamic();
@@ -313,7 +417,11 @@ try {
 
         if (message.startsWith("!")) {
           event.cancel = true; // Sembunyikan command admin dari publik
-          handleAdminChatCommand(sender, message);
+          system.run(() => {
+            handleAdminChatCommand(sender, message).catch(err => {
+              console.warn(`[Command Error] ${err.message}`);
+            });
+          });
           return;
         }
 
@@ -338,7 +446,11 @@ try {
         const message = (event.message || "").trim();
 
         if (message.startsWith("!")) {
-          handleAdminChatCommand(sender, message);
+          system.run(() => {
+            handleAdminChatCommand(sender, message).catch(err => {
+              console.warn(`[Command Error] ${err.message}`);
+            });
+          });
           return;
         }
 
@@ -362,9 +474,16 @@ try {
         if (event.initialSpawn && event.player?.name) {
           console.warn(`[PLAYER_JOIN] ${event.player.name}`);
         }
+        if (event.player) {
+          system.run(async () => {
+            try {
+              await isPlayerAdminAsync(event.player);
+            } catch {}
+          });
+        }
       } catch (e) {}
     });
-    console.warn("[Scripting] Subscribed to playerSpawn");
+    console.warn("[Scripting] Subscribed to playerSpawn (Auto OP Detection Active)");
   }
 } catch (e) {
   console.warn(`[Scripting Error playerSpawn] ${e.message}`);
@@ -503,6 +622,99 @@ function getPlayerFullData(player) {
   };
 }
 
+// Handler perintah konsol/scriptevent langsung (misal: scriptevent bot:cmd !warp base Steve)
+function handleAdminConsoleCommand(rawMessage) {
+  const message = (rawMessage || "").trim();
+  const clean = message.startsWith("!") ? message.slice(1).trim() : message;
+  const parts = clean.split(/\s+/);
+  const cmd = parts[0]?.toLowerCase();
+  const arg1 = parts[1];
+  const arg2 = parts[2];
+  const arg3 = parts[3];
+
+  console.warn(`[CONSOLE_CMD] Menjalankan perintah konsol: ${clean}`);
+
+  // 1. Nametag kontrol via konsol
+  if (cmd === "nametag" || cmd === "nametagdarah") {
+    if (arg1 === "off" || arg1 === "mati" || arg1 === "disable") {
+      disableAllNametags();
+      console.warn("[NAMETAG] Floating NameTag dinonaktifkan via konsol.");
+    } else {
+      enableAllNametags();
+      console.warn("[NAMETAG] Floating NameTag diaktifkan via konsol.");
+    }
+    return;
+  }
+
+  // 2. Warp via konsol: warp <nama> [target_pemain]
+  const warps = getAllWarpsDynamic();
+
+  if (cmd === "warp") {
+    if (!arg1) {
+      console.warn(`[WARP_LIST] Titik warp tersedia: ${Object.keys(warps).join(", ") || "kosong"}`);
+      return;
+    }
+    const warpName = arg1.toLowerCase();
+    const warp = warps[warpName];
+    if (!warp) {
+      console.warn(`[WARP_ERROR] Titik warp '${warpName}' tidak ditemukan!`);
+      return;
+    }
+
+    let targetPlayer = null;
+    if (arg2) {
+      targetPlayer = world.getPlayers().find(p => p.name.toLowerCase() === arg2.toLowerCase());
+    } else {
+      const players = world.getPlayers();
+      if (players.length > 0) targetPlayer = players[0];
+    }
+
+    if (targetPlayer) {
+      try {
+        const dimObj = world.getDimension(warp.dimension || "overworld");
+        targetPlayer.teleport({ x: warp.x, y: warp.y, z: warp.z }, { dimension: dimObj });
+        targetPlayer.sendMessage(`§b§l[WARP] §r§eTeleportasi ke titik §a'${warp.name}' §r§e(X:${warp.x} Y:${warp.y} Z:${warp.z}) berhasil via Konsol!`);
+        try { targetPlayer.runCommandAsync("playsound mob.endermen.portal @s"); } catch {}
+        console.warn(`[WARP_SUCCESS] Berhasil teleportasi ${targetPlayer.name} ke warp '${warp.name}' via konsol.`);
+      } catch (err) {
+        console.warn(`[WARP_ERROR] Gagal teleport: ${err.message}`);
+      }
+    } else {
+      console.warn(`[WARP_ERROR] Target pemain tidak ditemukan atau sedang offline!`);
+    }
+    return;
+  }
+
+  // 3. Setwarp via konsol: setwarp <nama> <x> <y> <z> [dimension]
+  if (cmd === "setwarp") {
+    if (!arg1 || arg2 === undefined || arg3 === undefined || parts[4] === undefined) {
+      console.warn("[WARP_ERROR] Format: setwarp <nama> <x> <y> <z> [dimensi]");
+      return;
+    }
+    const name = arg1.toLowerCase().replace(/[^a-z0-9_\-]/g, "");
+    const x = parseInt(arg2, 10) || 0;
+    const y = parseInt(arg3, 10) || 64;
+    const z = parseInt(parts[4], 10) || 0;
+    const dim = parts[5] || "overworld";
+    warps[name] = { name, x, y, z, dimension: dim, by: "Console" };
+    saveAllWarpsDynamic(warps);
+    console.warn(`[WARP_SET] Titik warp '${name}' berhasil disimpan via konsol.`);
+    return;
+  }
+
+  // 4. Delwarp via konsol: delwarp <nama>
+  if (cmd === "delwarp") {
+    if (!arg1) return;
+    const name = arg1.toLowerCase();
+    if (warps[name]) {
+      delete warps[name];
+      saveAllWarpsDynamic(warps);
+      console.warn(`[WARP_DEL] Titik warp '${name}' berhasil dihapus via konsol.`);
+    }
+    return;
+  }
+}
+
 // 5. Listener scriptEventReceive untuk inspeksi inventory & lokasi pemain (/inventory & /locate)
 try {
   if (system?.afterEvents?.scriptEventReceive && typeof system.afterEvents.scriptEventReceive.subscribe === "function") {
@@ -581,23 +793,48 @@ try {
         }
       }
 
-      // Kontrol Floating NameTag Simple dari Bot Discord
-      if (event.id === "bot:nametag") {
+      // Kontrol Floating NameTag Simple dari Bot Discord / Konsol
+      if (event.id === "bot:nametag" || event.id === "admin:nametag") {
         try {
           const raw = (event.message || "").trim().toLowerCase();
           if (raw === "off" || raw === "false") {
             disableAllNametags();
-            console.warn("[NAMETAG] Dinonaktifkan via bot Discord.");
-          } else if (raw === "on" || raw === "true") {
+            console.warn("[NAMETAG] Dinonaktifkan via bot/konsol.");
+          } else {
             enableAllNametags();
-            console.warn("[NAMETAG] Diaktifkan via bot Discord.");
+            console.warn("[NAMETAG] Diaktifkan via bot/konsol.");
           }
         } catch (err) {
           console.warn(`[Scripting Error bot:nametag] ${err.message}`);
         }
       }
+
+      // Eksekusi perintah console/bot admin via scriptevent (misal bot:cmd !nametag on atau bot:cmd !warp base)
+      if (event.id === "bot:cmd" || event.id === "admin:cmd") {
+        try {
+          handleAdminConsoleCommand(event.message);
+        } catch (err) {
+          console.warn(`[Scripting Error bot:cmd] ${err.message}`);
+        }
+      }
+
+      // Kelola admin via scriptevent bot:admin add <player>
+      if (event.id === "bot:admin" || event.id === "admin:op") {
+        try {
+          const parts = (event.message || "").trim().split(/\s+/);
+          const action = parts[0]?.toLowerCase();
+          const target = parts[1];
+          if (action === "add" && target) {
+            addAdminPlayer(target);
+          } else if ((action === "del" || action === "remove") && target) {
+            removeAdminPlayer(target);
+          }
+        } catch (err) {
+          console.warn(`[Scripting Error bot:admin] ${err.message}`);
+        }
+      }
     });
-    console.warn("[Scripting] Subscribed to scriptEventReceive (bot:inv, bot:locate, bot:setwarp, bot:delwarp, bot:nametag)");
+    console.warn("[Scripting] Subscribed to scriptEventReceive (bot:inv, bot:locate, bot:setwarp, bot:delwarp, bot:nametag, bot:cmd, bot:admin)");
   }
 } catch (e) {
   console.warn(`[Scripting Error scriptEventReceive] ${e.message}`);
