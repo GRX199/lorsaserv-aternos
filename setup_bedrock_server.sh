@@ -81,7 +81,7 @@ else
     echo "transport=raknet" >> server.properties
 fi
 
-# Tetapkan mode default Survival dan paksa survival saat login/restart
+# Tetapkan mode default Survival, dan jangan paksa reset mode pemain/OP saat login/restart
 if grep -q "^gamemode=" server.properties; then
     sed -i 's/^gamemode=.*/gamemode=survival/' server.properties
 else
@@ -89,9 +89,9 @@ else
 fi
 
 if grep -q "^force-gamemode=" server.properties; then
-    sed -i 's/^force-gamemode=.*/force-gamemode=true/' server.properties
+    sed -i 's/^force-gamemode=.*/force-gamemode=false/' server.properties
 else
-    echo "force-gamemode=true" >> server.properties
+    echo "force-gamemode=false" >> server.properties
 fi
 
 # 6. Pasang Service systemd agar server jalan otomatis & bisa dikontrol Bot
