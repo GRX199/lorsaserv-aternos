@@ -176,10 +176,28 @@ async function handleAdminChatCommand(sender, rawMessage) {
     return true;
   }
 
+  // BOOTSTRAP AUTO-REGISTRATION:
+  // Jika database admin masih kosong (belum ada admin terdaftar sama sekali):
+  // Otomatis daftarkan pemain pertama ini sebagai Admin Utama server agar tidak lock-out!
+  const currentAdmins = getAdminPlayers();
+  if (currentAdmins.length === 0) {
+    addAdminPlayer(sender.name);
+    sender.sendMessage(`§a§l[ADMIN SERVER] §r§aSelamat! Pemain §e${sender.name} §aotomatis terdaftar sebagai Admin pertama server.`);
+  }
+
+  // Perintah Klaim Admin Langsung: !opme / !claimadmin
+  if (cmd === "opme" || cmd === "claimadmin") {
+    addAdminPlayer(sender.name);
+    sender.sendMessage(`§a§l[ADMIN SERVER] §r§aStatus Admin untuk pemain §e${sender.name} §aberhasil diaktifkan!`);
+    try { sender.runCommandAsync("playsound random.levelup @s"); } catch {}
+    return true;
+  }
+
   // Verifikasi Izin Operator / Admin
   const isAdmin = await isPlayerAdminAsync(sender);
   if (!isAdmin) {
     sender.sendMessage("§c§l[DITOLAK] §r§cPerintah ini khusus untuk OP atau Admin server!");
+    sender.sendMessage("§7Ketik §f!opme §7untuk mengklaim hak Admin jika Anda pemilik server.");
     try { sender.runCommandAsync("playsound note.bass @s"); } catch {}
     return true;
   }

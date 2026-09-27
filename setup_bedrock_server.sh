@@ -95,6 +95,19 @@ else
     echo "force-gamemode=false" >> server.properties
 fi
 
+# Izinkan cheats agar Operator memiliki akses ke perintah administratif
+if grep -q "^allow-cheats=" server.properties; then
+    sed -i 's/^allow-cheats=.*/allow-cheats=true/' server.properties
+else
+    echo "allow-cheats=true" >> server.properties
+fi
+
+if grep -q "^op-permission-level=" server.properties; then
+    sed -i 's/^op-permission-level=.*/op-permission-level=4/' server.properties
+else
+    echo "op-permission-level=4" >> server.properties
+fi
+
 # 6. Pasang Service systemd agar server jalan otomatis & bisa dikontrol Bot
 echo "[6/6] Menyiapkan systemd service (minecraft-bedrock.service)..."
 SERVICE_FILE="/etc/systemd/system/minecraft-bedrock.service"
