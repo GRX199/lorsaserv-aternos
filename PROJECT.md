@@ -88,17 +88,17 @@ Fitur ini memberikan kemampuan membuat titik warp koordinat dan teleportasi inst
 
 ---
 
-## 🏷️ Sistem Floating NameTag Darah (Gaya Simple)
+## 🏷️ Sistem Floating NameTag Darah (Pemain & Semua Mob)
 
-Fitur ini menampilkan sisa darah (Health Points / HP) setiap pemain tepat di bawah nama mereka dengan gaya yang bersih, minimalis, dan mudah dibaca:
+Fitur ini menampilkan nama dan sisa darah (Health Points / HP) setiap **pemain dan semua mob** (Zombie, Skeleton, Cow, Villager, Iron Golem, Ender Dragon, dll) secara langsung melayang di atas kepala mereka dengan gaya bersih, minimalis, dan mudah dibaca:
 
 1. **Format Tampilan (Simple & Clean)**:
    ```text
-   <Nama Pemain>
+   <Nama Pemain / Mob>
    ❤ 20/20
    ```
-   - **Baris 1**: Nama pemain murni tanpa embel-embel berlebihan.
-   - **Baris 2**: Ikon hati `❤` dan angka darah real-time (contoh: `❤ 20/20`).
+   - **Baris 1**: Nama asli pemain atau nama mob (contoh: `Zombie`, `Iron Golem`, `Cow`, atau nama kustom jika dinamai Name Tag).
+   - **Baris 2**: Ikon hati `❤` dan angka darah real-time (contoh: `❤ 20/20`, atau `❤ 100/100` untuk Iron Golem).
    - **Pewarnaan Dinamis**:
      - 🟢 **Hijau (`§a`)**: HP sehat / tinggi (> 75%).
      - 🟡 **Kuning (`§e`)**: HP terluka (51% - 75%).
@@ -106,9 +106,10 @@ Fitur ini menampilkan sisa darah (Health Points / HP) setiap pemain tepat di baw
      - 🔴 **Merah (`§c`)**: HP kritis (≤ 25%).
      - 🟡 **Emas (`§6`)**: Tambahan hati dari Golden Apple / Absorption (> 20 HP).
 
-2. **Performa & Reaktivitas**:
-   - Berjalan pada interval ringan (10 ticks / 0.5 detik).
-   - Terintegrasi dengan event `entityHurt` dan `playerSpawn` sehingga darah langsung berubah seketika saat terkena serangan atau respawn.
+2. **Performa & Reaktivitas Tinggi (Zero-Lag)**:
+   - **Update Instan**: Darah langsung berkurang seketika dalam tick yang sama saat pemain atau mob terkena serangan/damage (`entityHurt`), atau saat entitas baru muncul (`entitySpawn`/`playerSpawn`).
+   - **Optimasi Radius Pintar**: Hanya memperbarui entitas dalam radius pandang pemain aktif (36 blok), sehingga server hemat memori dan CPU (0% overhead saat server kosong).
+   - Filter otomatis mengecualikan item jatuh, panah, xp orb, boat, dan armor stand agar tampilan dunia tetap rapi.
 
 3. **Kontrol On/Off**:
    - **In-Game Chat**: `!nametag on` atau `!nametag off` (Khusus Admin/OP), atau `!nametag` untuk cek status.

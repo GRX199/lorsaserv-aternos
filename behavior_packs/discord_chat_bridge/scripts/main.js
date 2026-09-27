@@ -97,17 +97,11 @@ function handleAdminChatCommand(sender, rawMessage) {
       return true;
     }
     if (arg1 === "off" || arg1 === "mati" || arg1 === "disable") {
-      setNametagEnabled(false);
-      for (const p of world.getPlayers()) {
-        try { p.nameTag = p.name; } catch {}
-      }
-      sender.sendMessage("§e[NAMETAG] Floating NameTag darah dinonaktifkan.");
+      disableAllNametags();
+      sender.sendMessage("§e[NAMETAG] Floating NameTag darah (Pemain & Mob) dinonaktifkan.");
     } else {
-      setNametagEnabled(true);
-      for (const p of world.getPlayers()) {
-        try { updatePlayerNameTagSimple(p, true); } catch {}
-      }
-      sender.sendMessage("§a[NAMETAG] Floating NameTag darah diaktifkan.");
+      enableAllNametags();
+      sender.sendMessage("§a[NAMETAG] Floating NameTag darah (Pemain & Mob) diaktifkan.");
     }
     return true;
   }
@@ -592,16 +586,10 @@ try {
         try {
           const raw = (event.message || "").trim().toLowerCase();
           if (raw === "off" || raw === "false") {
-            setNametagEnabled(false);
-            for (const p of world.getPlayers()) {
-              try { p.nameTag = p.name; } catch {}
-            }
+            disableAllNametags();
             console.warn("[NAMETAG] Dinonaktifkan via bot Discord.");
           } else if (raw === "on" || raw === "true") {
-            setNametagEnabled(true);
-            for (const p of world.getPlayers()) {
-              try { updatePlayerNameTagSimple(p, true); } catch {}
-            }
+            enableAllNametags();
             console.warn("[NAMETAG] Diaktifkan via bot Discord.");
           }
         } catch (err) {
@@ -665,7 +653,8 @@ try {
           let killerName = "";
           const killer = damageSource?.damagingEntity;
           if (killer) {
-            killerName = killer.nameTag || killer.name || (killer.typeId ? killer.typeId.replace(/^minecraft:/, "") : "");
+            const rawKiller = killer.nameTag || killer.name || (killer.typeId ? killer.typeId.replace(/^minecraft:/, "") : "");
+            killerName = rawKiller.split("\n")[0].trim();
           }
 
           // Ambil koordinat dan dimensi titik kematian
@@ -711,6 +700,11 @@ try {
               deadEntity.sendMessage(`§c§l[TITIK KEMATIAN] §r§eLokasi: §fX:${x} Y:${y} Z:${z} §7(${dimLabel}) §e• Ketik §f!deathpos §euntuk melihat kembali!`);
             } catch (e) {}
           }
+        } else {
+          // Jika mob mati, bersihkan nametag agar tidak menggantung sebelum despawn
+          try {
+            deadEntity.nameTag = "";
+          } catch {}
         }
       } catch (err) {
         console.warn(`[Scripting Error entityDie] ${err.message}`);
@@ -723,8 +717,45 @@ try {
 }
 
 // ==============================================================================
-// 7. SISTEM FLOATING NAMETAG DARAH SIMPLE (HANYA NAMA & DARAH)
+// 7. SISTEM FLOATING NAMETAG DARAH SIMPLE (PEMAIN & SEMUA MOB)
 // ==============================================================================
+
+// Daftar entitas non-living atau proyektil/dekorasi yang tidak perlu nametag darah
+const EXCLUDED_NAMETAG_ENTITIES = new Set([
+  "minecraft:item",
+  "minecraft:xp_orb",
+  "minecraft:xp_bottle",
+  "minecraft:arrow",
+  "minecraft:thrown_trident",
+  "minecraft:splash_potion",
+  "minecraft:lingering_potion",
+  "minecraft:snowball",
+  "minecraft:egg",
+  "minecraft:ender_pearl",
+  "minecraft:fishing_hook",
+  "minecraft:lightning_bolt",
+  "minecraft:tnt",
+  "minecraft:falling_block",
+  "minecraft:armor_stand",
+  "minecraft:boat",
+  "minecraft:chest_boat",
+  "minecraft:minecart",
+  "minecraft:chest_minecart",
+  "minecraft:hopper_minecart",
+  "minecraft:tnt_minecart",
+  "minecraft:furnace_minecart",
+  "minecraft:command_block_minecart",
+  "minecraft:eye_of_ender_signal",
+  "minecraft:shulker_bullet",
+  "minecraft:dragon_fireball",
+  "minecraft:small_fireball",
+  "minecraft:fireball",
+  "minecraft:wither_skull",
+  "minecraft:wither_skull_dangerous",
+  "minecraft:evocation_fangs",
+  "minecraft:area_effect_cloud",
+  "minecraft:fireworks_rocket"
+]);
 
 function isNametagEnabled() {
   try {
@@ -742,18 +773,65 @@ function setNametagEnabled(val) {
   }
 }
 
-// Update tampilan NameTag pemain: Hanya Nama dan Darah bergaya simpel
-function updatePlayerNameTagSimple(player, enabled = true) {
-  if (!player) return;
+// Helper nama bersih entitas (Pemain atau Mob)
+function formatEntityDisplayName(entity) {
+  if (!entity) return "Mob";
+  if (entity.typeId === "minecraft:player") {
+    return entity.name || "Player";
+  }
+
+  // Jika mob sudah dinamai secara kustom oleh player (misal pakai Name Tag)
+  const currentTag = entity.nameTag;
+  if (currentTag && typeof currentTag === "string" && currentTag.trim()) {
+    const firstLine = currentTag.split("\n")[0].trim();
+    if (firstLine && !firstLine.startsWith("§c❤") && !firstLine.startsWith("§6❤") && !firstLine.startsWith("§4❤")) {
+      return firstLine;
+    }
+  }
+
+  const rawId = (entity.typeId || "Mob").replace(/^minecraft:/, "");
+  return rawId
+    .split("_")
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+// Cek apakah entitas valid dan merupakan makhluk hidup / mob dengan HP
+function isLivingEntity(entity) {
+  if (!entity) return false;
   try {
-    if (typeof player.isValid === "function" && !player.isValid()) return;
+    if (typeof entity.isValid === "function" && !entity.isValid()) return false;
   } catch {}
 
-  const rawName = player.name || "Player";
+  const typeId = entity.typeId;
+  if (!typeId || EXCLUDED_NAMETAG_ENTITIES.has(typeId)) return false;
+  if (typeId.includes("projectile") || typeId.includes("bullet") || typeId.includes("cart")) return false;
+
+  const healthComp = entity.getComponent("health") || entity.getComponent("minecraft:health");
+  return !!healthComp;
+}
+
+// Update tampilan NameTag untuk Player dan Mob: Hanya Nama dan Darah bergaya simpel
+function updateEntityNameTagSimple(entity, enabled = true) {
+  if (!entity) return;
+  try {
+    if (typeof entity.isValid === "function" && !entity.isValid()) return;
+  } catch {}
+
+  if (!isLivingEntity(entity)) return;
+
+  const isPlayer = entity.typeId === "minecraft:player";
+  const displayName = formatEntityDisplayName(entity);
 
   if (!enabled) {
-    if (player.nameTag !== rawName) {
-      player.nameTag = rawName;
+    if (isPlayer) {
+      if (entity.nameTag !== displayName) {
+        entity.nameTag = displayName;
+      }
+    } else {
+      if (entity.nameTag) {
+        entity.nameTag = "";
+      }
     }
     return;
   }
@@ -762,7 +840,7 @@ function updatePlayerNameTagSimple(player, enabled = true) {
   let currentHp = 20;
   let maxHp = 20;
   try {
-    const healthComp = player.getComponent("health") || player.getComponent("minecraft:health");
+    const healthComp = entity.getComponent("health") || entity.getComponent("minecraft:health");
     if (healthComp) {
       currentHp = Math.max(0, Math.round(healthComp.currentValue));
       maxHp = Math.round(healthComp.defaultValue) || 20;
@@ -791,43 +869,128 @@ function updatePlayerNameTagSimple(player, enabled = true) {
   }
 
   // Gaya Simpel:
-  // Baris 1: Nama Pemain
+  // Baris 1: Nama Entitas (Player / Mob)
   // Baris 2: ❤ [HP]/[MaxHP]
-  const newTag = `${rawName}\n${heartIcon} ${hpColor}${currentHp}§7/§a${maxHp}`;
+  const newTag = `${displayName}\n${heartIcon} ${hpColor}${currentHp}§7/§a${maxHp}`;
 
-  if (player.nameTag !== newTag) {
-    player.nameTag = newTag;
+  if (entity.nameTag !== newTag) {
+    entity.nameTag = newTag;
+  }
+
+  // Untuk mob, pastikan nametag mengambang terlihat
+  if (!isPlayer) {
+    try {
+      if (typeof entity.isNameTagVisible === "boolean" || "isNameTagVisible" in entity) {
+        entity.isNameTagVisible = true;
+      }
+    } catch {}
   }
 }
 
-// Interval loop setiap 10 ticks (0.5 detik) untuk sinkronisasi darah seluruh pemain
+// Matikan nametag untuk semua pemain dan mob di sekitar
+function disableAllNametags() {
+  setNametagEnabled(false);
+  const players = world.getPlayers();
+  for (const p of players) {
+    try { p.nameTag = p.name || "Player"; } catch {}
+    try {
+      if (p.dimension && p.location) {
+        const nearby = p.dimension.getEntities({ location: p.location, maxDistance: 48 });
+        for (const ent of nearby) {
+          if (ent.typeId !== "minecraft:player") {
+            try { ent.nameTag = ""; } catch {}
+          }
+        }
+      }
+    } catch {}
+  }
+}
+
+// Aktifkan nametag untuk semua pemain dan mob di sekitar
+function enableAllNametags() {
+  setNametagEnabled(true);
+  const players = world.getPlayers();
+  for (const p of players) {
+    try { updateEntityNameTagSimple(p, true); } catch {}
+    try {
+      if (p.dimension && p.location) {
+        const nearby = p.dimension.getEntities({ location: p.location, maxDistance: 48 });
+        for (const ent of nearby) {
+          try { updateEntityNameTagSimple(ent, true); } catch {}
+        }
+      }
+    } catch {}
+  }
+}
+
+// Interval loop setiap 10 ticks (0.5 detik) untuk sinkronisasi darah pemain & mob di sekitar
 try {
   if (system?.runInterval) {
     system.runInterval(() => {
       try {
         const enabled = isNametagEnabled();
         const players = world.getPlayers();
+        if (players.length === 0) return; // Hemat CPU total saat server kosong
+
+        const processedEntities = new Set();
+
+        // 1. Update seluruh pemain yang online
         for (const p of players) {
-          updatePlayerNameTagSimple(p, enabled);
+          updateEntityNameTagSimple(p, enabled);
+          if (p.id) processedEntities.add(p.id);
+        }
+
+        if (!enabled) return;
+
+        // 2. Update seluruh mob di sekitar pemain (radius 36 blok)
+        for (const p of players) {
+          try {
+            if (!p.dimension || !p.location) continue;
+            const nearbyEntities = p.dimension.getEntities({
+              location: p.location,
+              maxDistance: 36
+            });
+            for (const ent of nearbyEntities) {
+              const entId = ent.id;
+              if (entId && processedEntities.has(entId)) continue;
+              if (entId) processedEntities.add(entId);
+
+              updateEntityNameTagSimple(ent, true);
+            }
+          } catch {}
         }
       } catch {}
     }, 10);
-    console.warn("[Scripting] Floating NameTag darah simple aktif (10 ticks interval)");
+    console.warn("[Scripting] Floating NameTag darah simple (Player & Mob) aktif (10 ticks interval)");
   }
 } catch (e) {
   console.warn(`[Scripting Error NameTag interval] ${e.message}`);
 }
 
-// Update instan saat pemain terkena damage (entityHurt)
+// Update instan saat pemain atau mob terkena serangan/damage (entityHurt)
 try {
   if (world?.afterEvents?.entityHurt?.subscribe) {
     world.afterEvents.entityHurt.subscribe((event) => {
       try {
         const hurt = event.hurtEntity;
-        if (hurt && (hurt.typeId === "minecraft:player" || hurt.name)) {
+        if (hurt && isLivingEntity(hurt)) {
           if (isNametagEnabled()) {
-            updatePlayerNameTagSimple(hurt, true);
+            updateEntityNameTagSimple(hurt, true);
           }
+        }
+      } catch {}
+    });
+  }
+} catch (e) {}
+
+// Update instan saat mob spawn (entitySpawn)
+try {
+  if (world?.afterEvents?.entitySpawn?.subscribe) {
+    world.afterEvents.entitySpawn.subscribe((event) => {
+      try {
+        const ent = event.entity;
+        if (ent && isLivingEntity(ent) && isNametagEnabled()) {
+          updateEntityNameTagSimple(ent, true);
         }
       } catch {}
     });
@@ -841,10 +1004,11 @@ try {
       try {
         const p = event.player;
         if (p && isNametagEnabled()) {
-          updatePlayerNameTagSimple(p, true);
+          updateEntityNameTagSimple(p, true);
         }
       } catch {}
     });
   }
 } catch (e) {}
+
 

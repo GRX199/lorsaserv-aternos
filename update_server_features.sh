@@ -2,7 +2,7 @@
 set -e
 
 echo "=========================================================="
-echo "  UPDATE FITUR SERVER BEDROCK (FLOATING NAMETAG SIMPLE)   "
+echo "  UPDATE FITUR SERVER BEDROCK (FLOATING NAMETAG PEMAIN & MOB)"
 echo "=========================================================="
 
 BEDROCK_DIR="$HOME/bedrock-server"
@@ -24,10 +24,10 @@ sudo systemctl restart minecraft-bedrock || true
 
 echo ""
 echo "=========================================================="
-echo "  SUKSES! Floating NameTag Darah (Simple) telah aktif!   "
+echo "  SUKSES! Floating NameTag Darah (Pemain & Mob) aktif!   "
 echo "=========================================================="
-echo "Pemain di server sekarang memiliki indikator darah simpel:"
-echo "  <Nama Pemain>"
+echo "Seluruh pemain dan mob sekarang memiliki indikator darah:"
+echo "  <Nama Pemain / Mob>"
 echo "  ❤ 20/20"
 echo ""
 echo "Perintah In-Game (Admin/OP):"
