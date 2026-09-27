@@ -235,14 +235,61 @@ function handleAdminChatCommand(sender, rawMessage) {
     return true;
   }
 
-  // 8. !warphelp
-  if (cmd === "warphelp") {
-    sender.sendMessage("§6§l[BANTUAN WARP & TP ADMIN]§r\n" +
+  // 8. !nametag [on|off|style|help]
+  if (cmd === "nametag") {
+    const cfg = getNametagConfig();
+    const subCmd = (arg1 || "").toLowerCase();
+
+    if (subCmd === "on") {
+      cfg.enabled = true;
+      saveNametagConfig(cfg);
+      sender.sendMessage("§a§l[NAMETAG] §r§aTampilan darah, level, dan badge pada nama pemain diaktifkan!");
+      try { sender.runCommandAsync("playsound random.levelup @s"); } catch {}
+      return true;
+    }
+
+    if (subCmd === "off") {
+      cfg.enabled = false;
+      saveNametagConfig(cfg);
+      for (const p of world.getPlayers()) {
+        try { p.nameTag = p.name; } catch {}
+      }
+      sender.sendMessage("§e§l[NAMETAG] §r§eTampilan darah pada nama pemain dinonaktifkan (kembali ke nama biasa).");
+      try { sender.runCommandAsync("playsound random.toast @s"); } catch {}
+      return true;
+    }
+
+    if (subCmd === "style") {
+      const styleName = (arg2 || "").toLowerCase();
+      if (styleName === "full" || styleName === "simple" || styleName === "hearts") {
+        cfg.style = styleName;
+        saveNametagConfig(cfg);
+        sender.sendMessage(`§a§l[NAMETAG] §r§aGaya nametag diubah ke: §e${styleName}§a!`);
+        try { sender.runCommandAsync("playsound random.levelup @s"); } catch {}
+      } else {
+        sender.sendMessage("§e[NAMETAG] Pilihan gaya: §f!nametag style full §e| §fsimple §e| §fhearts");
+      }
+      return true;
+    }
+
+    sender.sendMessage("§6§l[PENGATURAN NAMETAG & DARAH]§r\n" +
+      "§e!nametag on §7- Aktifkan tampilan darah di atas nama\n" +
+      "§e!nametag off §7- Matikan tampilan darah (nama biasa)\n" +
+      "§e!nametag style full §7- Gaya lengkap (Darah + Level + Dimensi)\n" +
+      "§e!nametag style simple §7- Gaya simpel (Hanya Darah HP)\n" +
+      "§e!nametag style hearts §7- Gaya bar hati visual (❤❤❤❤❤)");
+    return true;
+  }
+
+  // 9. !warphelp / !help
+  if (cmd === "warphelp" || cmd === "help") {
+    sender.sendMessage("§6§l[MENU PERINTAH ADMIN & OP]§r\n" +
       "§e!setwarp <nama> §7- Simpan titik warp posisi saat ini\n" +
       "§e!warp <nama> §7- Teleport ke titik warp\n" +
       "§e!warp <nama> <player> §7- Teleport pemain ke warp\n" +
       "§e!delwarp <nama> §7- Hapus titik warp\n" +
       "§e!warplist §7- Lihat daftar semua titik warp\n" +
+      "§e!nametag <on/off/style> §7- Atur tampilan darah & info di atas nama\n" +
       "§e!tpto <player> §7- Teleport diri sendiri ke pemain\n" +
       "§e!tphere <player> §7- Tarik pemain ke posisi Anda\n" +
       "§e!tp <p1> <p2> §7- Teleport pemain 1 ke pemain 2");
@@ -492,8 +539,30 @@ try {
           console.warn(`[Scripting Error bot:delwarp] ${err.message}`);
         }
       }
+
+      // Kontrol NameTag Darah & Info dari Bot Discord
+      if (event.id === "bot:nametag") {
+        try {
+          const raw = (event.message || "").trim();
+          const cfg = getNametagConfig();
+          if (raw === "on") {
+            cfg.enabled = true;
+          } else if (raw === "off") {
+            cfg.enabled = false;
+            for (const p of world.getPlayers()) {
+              try { p.nameTag = p.name; } catch {}
+            }
+          } else if (raw.startsWith("style:")) {
+            cfg.style = raw.replace("style:", "").trim();
+          }
+          saveNametagConfig(cfg);
+          console.warn(`[NAMETAG_CONFIG] ${JSON.stringify(cfg)}`);
+        } catch (err) {
+          console.warn(`[Scripting Error bot:nametag] ${err.message}`);
+        }
+      }
     });
-    console.warn("[Scripting] Subscribed to scriptEventReceive (bot:inv, bot:locate, bot:setwarp, bot:delwarp)");
+    console.warn("[Scripting] Subscribed to scriptEventReceive (bot:inv, bot:locate, bot:setwarp, bot:delwarp, bot:nametag)");
   }
 } catch (e) {
   console.warn(`[Scripting Error scriptEventReceive] ${e.message}`);
@@ -545,4 +614,165 @@ try {
 } catch (e) {
   console.warn(`[Scripting Error entityDie subscribe] ${e.message}`);
 }
+
+// ==============================================================================
+// 7. SISTEM FLOATING NAMETAG DARAH (HP), LEVEL XP, BADGE & DIMENSI PEMAIN
+// ==============================================================================
+
+// Helper Konfigurasi NameTag
+function getNametagConfig() {
+  try {
+    const raw = world.getDynamicProperty("nametag_config");
+    if (raw && typeof raw === "string") {
+      return JSON.parse(raw);
+    }
+  } catch {}
+  return {
+    enabled: true,
+    style: "full", // "full" (Lengkap), "simple" (Simpel), "hearts" (Visual Hati)
+    showHealth: true,
+    showLevel: true,
+    showDimension: true,
+    showBadges: true
+  };
+}
+
+function saveNametagConfig(cfg) {
+  try {
+    world.setDynamicProperty("nametag_config", JSON.stringify(cfg));
+  } catch (err) {
+    console.warn(`[Scripting Error saveNametagConfig] ${err.message}`);
+  }
+}
+
+// Render bar visual hati: ❤❤❤❤❤
+function renderHeartsBar(current, max) {
+  const totalIcons = 10;
+  const ratio = Math.max(0, Math.min(1, max > 0 ? (current / max) : 0));
+  const fullIcons = Math.round(ratio * totalIcons);
+  const emptyIcons = Math.max(0, totalIcons - fullIcons);
+  return "§c" + "❤".repeat(fullIcons) + "§8" + "❤".repeat(emptyIcons);
+}
+
+// Update NameTag Floating Text di atas kepala pemain
+function updatePlayerNameTag(player, cfg = null) {
+  if (!player) return;
+  try {
+    if (typeof player.isValid === "function" && !player.isValid()) return;
+  } catch {}
+
+  const config = cfg || getNametagConfig();
+  if (!config.enabled) {
+    if (player.nameTag !== player.name) {
+      player.nameTag = player.name;
+    }
+    return;
+  }
+
+  const rawName = player.name || "Player";
+
+  // 1. Baca Health Component
+  const healthComp = player.getComponent("health") || player.getComponent("minecraft:health");
+  const currentHp = healthComp ? Math.max(0, Math.round(healthComp.currentValue)) : 20;
+  const maxHp = healthComp ? Math.round(healthComp.defaultValue) : 20;
+  const level = typeof player.level === "number" ? player.level : 0;
+
+  // 2. Tentukan Warna Darah Berdasarkan Sisa HP
+  let hpColor = "§a"; // Hijau (Aman / Sehat)
+  if (currentHp > maxHp) {
+    hpColor = "§6"; // Emas (Absorption / Golden Apple)
+  } else {
+    const ratio = maxHp > 0 ? (currentHp / maxHp) : 1;
+    if (ratio <= 0.25) {
+      hpColor = "§4§l"; // Merah Tua Tebal (Kritis!)
+    } else if (ratio <= 0.5) {
+      hpColor = "§c"; // Merah Waspada
+    } else if (ratio <= 0.75) {
+      hpColor = "§e"; // Kuning
+    }
+  }
+
+  // 3. Tentukan Badge / Role Pemain
+  let prefix = "";
+  let nameColor = "§b";
+
+  if (config.showBadges !== false) {
+    const isOp = typeof player.isOp === "function" && player.isOp();
+    const isAdmin = isOp || (typeof player.hasTag === "function" && (player.hasTag("admin") || player.hasTag("op")));
+    const isVip = typeof player.hasTag === "function" && player.hasTag("vip");
+
+    if (isAdmin) {
+      prefix = "§6👑 [ADMIN] ";
+      nameColor = "§e";
+    } else if (isVip) {
+      prefix = "§d💎 [VIP] ";
+      nameColor = "§f";
+    }
+  }
+
+  let afkTag = "";
+  if (typeof player.hasTag === "function" && player.hasTag("afk")) {
+    afkTag = " §7[AFK]";
+  }
+
+  // 4. Ikon Dimensi
+  const dimId = player.dimension?.id ? player.dimension.id.replace(/^minecraft:/, "") : "overworld";
+  let dimIcon = "§2🌍";
+  if (dimId.includes("nether")) {
+    dimIcon = "§c🔥";
+  } else if (dimId.includes("end")) {
+    dimIcon = "§d🌌";
+  }
+
+  // 5. Susun NameTag Multi-Line:
+  const line1 = `${prefix}${nameColor}${rawName}${afkTag}`;
+  let line2 = "";
+
+  if (config.style === "simple") {
+    // Gaya Simpel: Hanya HP
+    line2 = `${hpColor}❤ ${currentHp}/${maxHp} HP`;
+  } else if (config.style === "hearts") {
+    // Gaya Hearts Bar
+    line2 = `${renderHeartsBar(currentHp, maxHp)} §7(${currentHp}) §b⭐${level}`;
+  } else {
+    // Gaya Full (Default): HP + Level + Dimensi
+    line2 = `${hpColor}❤ ${currentHp}/${maxHp} §7| §b⭐ Lv.${level} §7| ${dimIcon}`;
+  }
+
+  const newTag = `${line1}\n${line2}`;
+  if (player.nameTag !== newTag) {
+    player.nameTag = newTag;
+  }
+
+  // 6. Sinkronisasi ke Scoreboard Belowname (Jika aktif di server)
+  try {
+    if (world?.scoreboard) {
+      let healthObj = world.scoreboard.getObjective("health");
+      if (!healthObj) {
+        healthObj = world.scoreboard.addObjective("health", "§c❤ HP");
+        world.scoreboard.setObjectiveAtDisplaySlot("belowname", { objective: healthObj });
+      }
+      healthObj.setScore(player, currentHp);
+    }
+  } catch (sbErr) {}
+}
+
+// Interval loop untuk memperbarui NameTag seluruh pemain setiap 10 ticks (0.5 detik)
+try {
+  if (system?.runInterval) {
+    system.runInterval(() => {
+      try {
+        const cfg = getNametagConfig();
+        const players = world.getPlayers();
+        for (const p of players) {
+          updatePlayerNameTag(p, cfg);
+        }
+      } catch {}
+    }, 10);
+    console.warn("[Scripting] NameTag Health & Info updater active (10 ticks interval)");
+  }
+} catch (e) {
+  console.warn(`[Scripting Error NameTag interval] ${e.message}`);
+}
+
 
