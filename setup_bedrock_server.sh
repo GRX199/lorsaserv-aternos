@@ -81,6 +81,19 @@ else
     echo "transport=raknet" >> server.properties
 fi
 
+# Tetapkan mode default Survival dan paksa survival saat login/restart
+if grep -q "^gamemode=" server.properties; then
+    sed -i 's/^gamemode=.*/gamemode=survival/' server.properties
+else
+    echo "gamemode=survival" >> server.properties
+fi
+
+if grep -q "^force-gamemode=" server.properties; then
+    sed -i 's/^force-gamemode=.*/force-gamemode=true/' server.properties
+else
+    echo "force-gamemode=true" >> server.properties
+fi
+
 # 6. Pasang Service systemd agar server jalan otomatis & bisa dikontrol Bot
 echo "[6/6] Menyiapkan systemd service (minecraft-bedrock.service)..."
 SERVICE_FILE="/etc/systemd/system/minecraft-bedrock.service"
