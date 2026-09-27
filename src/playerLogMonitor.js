@@ -19,6 +19,7 @@ class PlayerLogMonitor {
     this.flushTimer = null;
     this.inventoryCallbacks = new Map();
     this.locationCallbacks = new Map();
+    this.lastDeaths = new Map();
   }
 
   /**
@@ -340,14 +341,43 @@ class PlayerLogMonitor {
     }
 
     // 1.8. Deteksi Player Death (Bedrock Behavior Pack)
-    // Format Bedrock BDS: [Scripting] [DEATH] <Steve> cause:fall killer:Zombie
-    const deathMatch = line.match(/\[DEATH\]\s*<([^>]+)>\s*cause:([^\s]+)(?:\s*killer:(.*))?/i);
+    // Format Bedrock BDS: [Scripting] [DEATH] <Steve> cause:fall loc:120,64,-350:overworld killer:Zombie
+    const deathMatch = line.match(/\[DEATH\]\s*<([^>]+)>\s*cause:([^\s]+)(?:\s*(?:loc|pos):([^\s]+))?(?:\s*killer:(.*))?/i);
     if (deathMatch) {
       const victim = deathMatch[1].trim();
       const cause = deathMatch[2].trim();
-      const killer = (deathMatch[3] || '').trim();
-      console.log(`[PlayerLogMonitor] 💀 Player Death Terdeteksi: ${victim} (Penyebab: ${cause}, Killer: ${killer || 'none'})`);
-      this.forwardDeathFeedToDiscord(victim, cause, killer);
+      const rawLoc = (deathMatch[3] || '').trim();
+      const killer = (deathMatch[4] || '').trim();
+
+      let coords = null;
+      if (rawLoc) {
+        const [posPart, dimPart] = rawLoc.split(':');
+        if (posPart) {
+          const [x, y, z] = posPart.split(',').map(n => parseInt(n, 10));
+          if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
+            coords = {
+              x,
+              y,
+              z,
+              dimension: dimPart || 'overworld'
+            };
+          }
+        }
+      }
+
+      if (coords) {
+        this.lastDeaths.set(victim.toLowerCase(), {
+          victim,
+          cause,
+          killer,
+          coords,
+          timestamp: Date.now()
+        });
+      }
+
+      const coordStr = coords ? ` Titik: X:${coords.x} Y:${coords.y} Z:${coords.z} (${coords.dimension}),` : '';
+      console.log(`[PlayerLogMonitor] 💀 Player Death Terdeteksi: ${victim} (Penyebab: ${cause},${coordStr} Killer: ${killer || 'none'})`);
+      this.forwardDeathFeedToDiscord(victim, cause, killer, coords);
       return;
     }
 
@@ -565,7 +595,7 @@ class PlayerLogMonitor {
   /**
    * Mengirimkan notifikasi kematian pemain (Death Feed) ke Discord
    */
-  async forwardDeathFeedToDiscord(victim, cause, killer) {
+  async forwardDeathFeedToDiscord(victim, cause, killer, coords = null) {
     if (!this.statusManager?.client) return;
 
     const channelId = this.statusManager?.getChatBridgeChannelId()
@@ -615,12 +645,26 @@ class PlayerLogMonitor {
       deathMessage = 'hangus terbakar api!';
     } else if (cleanCause === 'magic') {
       deathMessage = 'tewas terkena efek racun / sihir!';
+    } else if (cleanCause === 'wither') {
+      deathMessage = 'membusuk layu terkena efek Wither!';
     } else if (cleanCause === 'starve') {
       deathMessage = 'mati kelaparan karena kehabisan perbekalan!';
     } else if (cleanCause === 'suffocation') {
       deathMessage = 'terkubur hidup-hidup di dalam dinding blok!';
     } else if (cleanCause === 'void') {
       deathMessage = 'terperosok jatuh ke dalam jurang kehampaan (*The Void*)!';
+    } else if (cleanCause === 'freezing') {
+      deathMessage = 'mati membeku kedinginan di dalam salju!';
+    } else if (cleanCause === 'lightning') {
+      deathMessage = 'tersambar sambaran petir dari langit!';
+    } else if (cleanCause === 'flyintowall' || cleanCause === 'fly_into_wall') {
+      deathMessage = 'menabrak dinding dengan kecepatan tinggi saat terbang!';
+    } else if (cleanCause === 'stalactite' || cleanCause === 'falling_block') {
+      deathMessage = 'tertimpa reruntuhan stalaktit atau blok dari atas!';
+    } else if (cleanCause === 'anvil') {
+      deathMessage = 'hancur tertimpa anvil yang jatuh!';
+    } else if (cleanCause === 'thorns') {
+      deathMessage = 'tewas terkena pantulan duri (Thorns)!';
     } else {
       deathMessage = `telah tewas (${cause || 'alasan tidak diketahui'})`;
     }
@@ -630,8 +674,35 @@ class PlayerLogMonitor {
       const embed = new EmbedBuilder()
         .setColor(0x992d22)
         .setDescription(`💀 **${victim}** ${deathMessage}`)
-        .setThumbnail(`https://mc-heads.net/avatar/${encodeURIComponent(victim)}/64`)
-        .setTimestamp();
+        .setThumbnail(`https://mc-heads.net/avatar/${encodeURIComponent(victim)}/64`);
+
+      if (coords && coords.x !== undefined && coords.y !== undefined && coords.z !== undefined) {
+        const dimKey = (coords.dimension || 'overworld').toLowerCase();
+        let dimLabel = '🌳 Overworld';
+        if (dimKey.includes('nether')) {
+          dimLabel = '🔥 The Nether';
+        } else if (dimKey.includes('end')) {
+          dimLabel = '🌌 The End';
+        }
+
+        embed.addFields(
+          {
+            name: '📍 Titik Koordinat Kematian',
+            value: `\`X: ${coords.x}  Y: ${coords.y}  Z: ${coords.z}\``,
+            inline: true
+          },
+          {
+            name: '🌍 Dimensi',
+            value: dimLabel,
+            inline: true
+          }
+        );
+        embed.setFooter({
+          text: `💡 Teleportasi Admin: !tp ${coords.x} ${coords.y} ${coords.z}`
+        });
+      }
+
+      embed.setTimestamp();
 
       await targetChannel.send({ embeds: [embed] }).catch(() => {});
     } catch (err) {

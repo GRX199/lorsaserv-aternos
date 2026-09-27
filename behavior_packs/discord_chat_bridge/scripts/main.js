@@ -46,24 +46,47 @@ function isPlayerAdmin(player) {
   return false;
 }
 
-// Handler Perintah Admin Chat In-Game (!setwarp, !warp, !delwarp, !warplist, !tp, !tpto, !tphere)
+// Pelacak posisi pemain berkala & catatan riwayat titik kematian
+const lastPlayerPositions = new Map();
+const lastDeathPositions = new Map();
+
+// Handler Perintah Chat In-Game (!deathpos, !setwarp, !warp, !delwarp, !warplist, !tp, !tpto, !tphere)
 function handleAdminChatCommand(sender, rawMessage) {
   if (!sender) return false;
   const message = (rawMessage || "").trim();
   if (!message.startsWith("!")) return false;
-
-  // Verifikasi Izin: Jika bukan Admin/OP, tolak mentah-mentah
-  if (!isPlayerAdmin(sender)) {
-    sender.sendMessage("§c§l[DITOLAK] §r§cPerintah warp/teleport ini khusus untuk OP atau Admin server!");
-    try { sender.runCommandAsync("playsound note.bass @s"); } catch {}
-    return true;
-  }
 
   const parts = message.slice(1).trim().split(/\s+/);
   const cmd = parts[0].toLowerCase();
   const arg1 = parts[1];
   const arg2 = parts[2];
   const arg3 = parts[3];
+
+  // Perintah Publik: !deathpos / !lastdeath / !titikmati (Bisa digunakan oleh semua member)
+  if (cmd === "deathpos" || cmd === "lastdeath" || cmd === "titikmati") {
+    let targetName = sender.name;
+    if (arg1 && isPlayerAdmin(sender)) {
+      targetName = arg1;
+    }
+    const death = lastDeathPositions.get(targetName.toLowerCase());
+    if (death) {
+      const dimLabel = death.dim === "nether" ? "The Nether" : death.dim === "the_end" ? "The End" : "Overworld";
+      sender.sendMessage(`§c§l[TITIK KEMATIAN] §r§ePemain §f${targetName} §egugur di: §aX:${death.x} Y:${death.y} Z:${death.z} §7(${dimLabel})`);
+      if (isPlayerAdmin(sender)) {
+        sender.sendMessage(`§7Ketik: §f!tp ${death.x} ${death.y} ${death.z} §7untuk teleportasi ke sana.`);
+      }
+    } else {
+      sender.sendMessage(`§e[TITIK KEMATIAN] Belum ada catatan titik kematian untuk '§f${targetName}§e'.`);
+    }
+    return true;
+  }
+
+  // Verifikasi Izin: Jika bukan Admin/OP, tolak mentah-mentah untuk perintah berikutnya
+  if (!isPlayerAdmin(sender)) {
+    sender.sendMessage("§c§l[DITOLAK] §r§cPerintah warp/teleport ini khusus untuk OP atau Admin server!");
+    try { sender.runCommandAsync("playsound note.bass @s"); } catch {}
+    return true;
+  }
 
   const warps = getAllWarpsDynamic();
 
@@ -237,7 +260,9 @@ function handleAdminChatCommand(sender, rawMessage) {
 
   // 8. !warphelp
   if (cmd === "warphelp") {
-    sender.sendMessage("§6§l[BANTUAN WARP & TP ADMIN]§r\n" +
+    sender.sendMessage("§6§l[BANTUAN COMMAND & WARP SERVER]§r\n" +
+      "§e!deathpos §7- Cek koordinat titik kematian terakhir Anda\n" +
+      "§e!deathpos <player> §7- Cek titik kematian pemain lain (Admin)\n" +
       "§e!setwarp <nama> §7- Simpan titik warp posisi saat ini\n" +
       "§e!warp <nama> §7- Teleport ke titik warp\n" +
       "§e!warp <nama> <player> §7- Teleport pemain ke warp\n" +
@@ -245,7 +270,8 @@ function handleAdminChatCommand(sender, rawMessage) {
       "§e!warplist §7- Lihat daftar semua titik warp\n" +
       "§e!tpto <player> §7- Teleport diri sendiri ke pemain\n" +
       "§e!tphere <player> §7- Tarik pemain ke posisi Anda\n" +
-      "§e!tp <p1> <p2> §7- Teleport pemain 1 ke pemain 2");
+      "§e!tp <p1> <p2> §7- Teleport pemain 1 ke pemain 2\n" +
+      "§e!tp <x> <y> <z> §7- Teleportasi ke koordinat");
     return true;
   }
 
@@ -548,10 +574,28 @@ try {
         }
       } catch {}
     }, 400); // 400 ticks = 20 detik
+
+    // Pelacak posisi berkala setiap 20 ticks (1 detik) sebagai fallback koordinat kematian
+    system.runInterval(() => {
+      try {
+        const players = world.getPlayers();
+        for (const p of players) {
+          if (p?.name && p.location) {
+            lastPlayerPositions.set(p.name.toLowerCase(), {
+              name: p.name,
+              x: Math.floor(p.location.x),
+              y: Math.floor(p.location.y),
+              z: Math.floor(p.location.z),
+              dim: (p.dimension?.id || "overworld").replace(/^minecraft:/, "")
+            });
+          }
+        }
+      } catch {}
+    }, 20); // 20 ticks = 1 detik
   }
 } catch (e) {}
 
-// 6. Listener entityDie untuk Death Feed (Notifikasi Kematian Pemain)
+// 6. Listener entityDie untuk Death Feed (Notifikasi Kematian Pemain dengan Koordinat)
 try {
   if (world?.afterEvents && typeof world.afterEvents.entityDie?.subscribe === "function") {
     world.afterEvents.entityDie.subscribe((event) => {
@@ -561,7 +605,7 @@ try {
 
         // Cek jika entitas yang mati adalah player
         if (deadEntity.typeId === "minecraft:player" || deadEntity.name) {
-          const playerName = deadEntity.name || "Player";
+          const playerName = deadEntity.name || deadEntity.nameTag || "Player";
           const damageSource = event.damageSource;
           const cause = damageSource?.cause || "unknown";
 
@@ -571,13 +615,55 @@ try {
             killerName = killer.nameTag || killer.name || (killer.typeId ? killer.typeId.replace(/^minecraft:/, "") : "");
           }
 
-          console.warn(`[DEATH] <${playerName}> cause:${cause} killer:${killerName}`);
+          // Ambil koordinat dan dimensi titik kematian
+          let x = 0, y = 0, z = 0, dim = "overworld";
+          let hasLoc = false;
+          try {
+            if (deadEntity.location) {
+              x = Math.floor(deadEntity.location.x);
+              y = Math.floor(deadEntity.location.y);
+              z = Math.floor(deadEntity.location.z);
+              dim = (deadEntity.dimension?.id || "overworld").replace(/^minecraft:/, "");
+              hasLoc = true;
+            }
+          } catch (locErr) {}
+
+          if (!hasLoc && lastPlayerPositions.has(playerName.toLowerCase())) {
+            const fallback = lastPlayerPositions.get(playerName.toLowerCase());
+            x = fallback.x;
+            y = fallback.y;
+            z = fallback.z;
+            dim = fallback.dim;
+            hasLoc = true;
+          }
+
+          if (hasLoc) {
+            lastDeathPositions.set(playerName.toLowerCase(), {
+              name: playerName,
+              x,
+              y,
+              z,
+              dim,
+              time: Date.now()
+            });
+          }
+
+          const locStr = hasLoc ? `loc:${x},${y},${z}:${dim} ` : "";
+          console.warn(`[DEATH] <${playerName}> cause:${cause} ${locStr}killer:${killerName}`);
+
+          // Kirim pesan langsung ke pemain yang mati agar tahu posisi barangnya
+          if (hasLoc) {
+            try {
+              const dimLabel = dim === "nether" ? "The Nether" : dim === "the_end" ? "The End" : "Overworld";
+              deadEntity.sendMessage(`§c§l[TITIK KEMATIAN] §r§eLokasi: §fX:${x} Y:${y} Z:${z} §7(${dimLabel}) §e• Ketik §f!deathpos §euntuk melihat kembali!`);
+            } catch (e) {}
+          }
         }
       } catch (err) {
         console.warn(`[Scripting Error entityDie] ${err.message}`);
       }
     });
-    console.warn("[Scripting] Subscribed to entityDie (Death Feed)");
+    console.warn("[Scripting] Subscribed to entityDie (Death Feed with Coordinates)");
   }
 } catch (e) {
   console.warn(`[Scripting Error entityDie subscribe] ${e.message}`);

@@ -104,7 +104,26 @@ module.exports = {
             value: portalCalc,
             inline: false
           }
-        )
+        );
+
+      if (monitor.lastDeaths && monitor.lastDeaths.has(targetPlayer.toLowerCase())) {
+        const d = monitor.lastDeaths.get(targetPlayer.toLowerCase());
+        if (d && d.coords) {
+          const c = d.coords;
+          const minsAgo = Math.round((Date.now() - d.timestamp) / 60000);
+          const timeText = minsAgo <= 1 ? 'baru saja' : `${minsAgo} menit lalu`;
+          const dimLabel = (c.dimension || 'overworld').toLowerCase().includes('nether')
+            ? '🔥 Nether'
+            : (c.dimension || '').toLowerCase().includes('end') ? '🌌 The End' : '🌳 Overworld';
+          embed.addFields({
+            name: '💀 Titik Kematian Terakhir',
+            value: `\`X: ${c.x}  Y: ${c.y}  Z: ${c.z}\` • **${dimLabel}** *(${timeText})*`,
+            inline: false
+          });
+        }
+      }
+
+      embed
         .setFooter({
           text: '🔒 Rahasia Admin (Pesan ini hanya terlihat oleh Anda)',
           iconURL: interaction.user.displayAvatarURL()
