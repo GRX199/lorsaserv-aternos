@@ -4,15 +4,21 @@
     "name": "Discord Chat Bridge",
     "description": "Meneruskan chat in-game Minecraft Bedrock ke channel Discord",
     "uuid": "a7b8c9d0-1234-4567-89ab-cdef01234567",
-    "version": [1, 0, 0],
+    "version": [1, 0, 1],
     "min_engine_version": [1, 20, 0]
   },
   "modules": [
     {
+      "description": "Behavior Pack Structures & Data",
+      "type": "data",
+      "uuid": "c9d0e1f2-3456-789a-bcde-f01234567890",
+      "version": [1, 0, 1]
+    },
+    {
       "type": "script",
       "language": "javascript",
       "uuid": "b8c9d0e1-2345-5678-9abc-def012345678",
-      "version": [1, 0, 0],
+      "version": [1, 0, 1],
       "entry": "scripts/main.js"
     }
   ],
