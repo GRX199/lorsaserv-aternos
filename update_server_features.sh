@@ -8,6 +8,7 @@ echo "=========================================================="
 BEDROCK_DIR="$HOME/bedrock-server"
 BP_DIR="$BEDROCK_DIR/behavior_packs/discord_chat_bridge"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SPECIFIC_OPERATOR="$1"
 
 if [ ! -d "$BEDROCK_DIR" ]; then
   echo "❌ Direktori $BEDROCK_DIR tidak ditemukan."
@@ -41,24 +42,33 @@ sudo systemctl restart minecraft-bedrock || true
 # Tunggu 3 detik agar server booting dan screen aktif
 sleep 3
 if screen -ls | grep -q "mc-bedrock"; then
-  echo "Memberikan izin tag dan mengaktifkan nametag..."
-  screen -S mc-bedrock -X stuff "tag @a add op\n" || true
-  screen -S mc-bedrock -X stuff "tag @a add admin\n" || true
+  echo "Membersihkan tag op/admin dari pemain biasa agar tidak semua pemain jadi admin..."
+  screen -S mc-bedrock -X stuff "tag @a remove op\n" || true
+  screen -S mc-bedrock -X stuff "tag @a remove admin\n" || true
+
+  # Jika ada nama operator khusus yang dimasukkan sebagai argumen script
+  if [ -n "$SPECIFIC_OPERATOR" ]; then
+    echo "Menetapkan izin OP khusus untuk pemain: $SPECIFIC_OPERATOR"
+    screen -S mc-bedrock -X stuff "op \"$SPECIFIC_OPERATOR\"\n" || true
+    screen -S mc-bedrock -X stuff "tag \"$SPECIFIC_OPERATOR\" add op\n" || true
+    screen -S mc-bedrock -X stuff "tag \"$SPECIFIC_OPERATOR\" add admin\n" || true
+    screen -S mc-bedrock -X stuff "scriptevent bot:admin add $SPECIFIC_OPERATOR\n" || true
+  fi
+
   screen -S mc-bedrock -X stuff "scriptevent bot:nametag on\n" || true
 fi
 
 echo ""
 echo "=========================================================="
-echo "  SUKSES! Floating NameTag & Izin OP Berhasil Diperbarui! "
+echo "  SUKSES! Server & Izin Operator Berhasil Diperbarui!     "
 echo "=========================================================="
-echo "Status Admin In-Game:"
-echo "  • Jika Anda Operator, ketik: !nametag on"
-echo "  • Atau ketik !opme untuk mengaktifkan status Admin langsung"
+echo "Keamanan Terjaga:"
+echo "  • Pemain biasa TIDAK menjadi admin atau operator."
+echo "  • Hanya pemain yang secara resmi di-OP yang memiliki akses."
 echo ""
-echo "Konsol VPS / Screen BDS:"
-echo "  • scriptevent bot:nametag on"
-echo "  • tag <NamaPemain> add op"
+echo "Cara Memberikan OP ke Pemain Tertentu Saja:"
+echo "  • Di Discord Bot:  /op pemain:<Gamertag>"
+echo "  • Di Konsol BDS:   op <Gamertag>"
+echo "                     tag <Gamertag> add op"
+echo "  • Atau jalankan:   bash update_server_features.sh <GamertagAnda>"
 echo ""
-echo "Discord Bot:"
-echo "  • /nametag aktif: True"
-echo "  • /cmd perintah: !nametag on"
