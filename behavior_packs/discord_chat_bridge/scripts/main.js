@@ -335,6 +335,52 @@ try {
   console.warn(`[Scripting Error playerLeave] ${e.message}`);
 }
 
+// Helper untuk mengekstrak informasi item beserta Enchantment & Durability
+function serializeItemWithDetails(item, slot = null) {
+  if (!item) return null;
+  const id = item.typeId.replace(/^minecraft:/, "");
+  const amount = item.amount || 1;
+  const name = item.nameTag || null;
+  const enchants = [];
+  let durability = null;
+
+  // 1. Ekstrak Enchantment
+  try {
+    const enchComp = item.getComponent("minecraft:enchantable") || item.getComponent("enchantable");
+    if (enchComp && typeof enchComp.getEnchantments === "function") {
+      const list = enchComp.getEnchantments();
+      if (Array.isArray(list)) {
+        for (const e of list) {
+          if (!e) continue;
+          const typeId = (e.type?.id || e.type || "").replace(/^minecraft:/, "");
+          const level = typeof e.level === "number" ? e.level : 1;
+          if (typeId) {
+            enchants.push({ id: typeId, level });
+          }
+        }
+      }
+    }
+  } catch (err) {}
+
+  // 2. Ekstrak Durability
+  try {
+    const durComp = item.getComponent("minecraft:durability") || item.getComponent("durability");
+    if (durComp && typeof durComp.maxDurability === "number") {
+      durability = {
+        damage: durComp.damage || 0,
+        max: durComp.maxDurability,
+        remaining: Math.max(0, durComp.maxDurability - (durComp.damage || 0))
+      };
+    }
+  } catch (err) {}
+
+  const res = { id, amount, name };
+  if (slot !== null) res.slot = slot;
+  if (enchants.length > 0) res.enchants = enchants;
+  if (durability) res.durability = durability;
+  return res;
+}
+
 // Helper untuk mengambil seluruh data lokasi, vitalitas, dan isi inventory pemain
 function getPlayerFullData(player) {
   const loc = player.location;
@@ -362,11 +408,7 @@ function getPlayerFullData(player) {
       try {
         const item = equippable.getEquipment(s.slot);
         if (item) {
-          armor[s.key] = {
-            id: item.typeId.replace(/^minecraft:/, ""),
-            amount: item.amount || 1,
-            name: item.nameTag || null
-          };
+          armor[s.key] = serializeItemWithDetails(item);
         }
       } catch {}
     }
@@ -383,12 +425,7 @@ function getPlayerFullData(player) {
       try {
         const item = container.getItem(i);
         if (item) {
-          const itemData = {
-            slot: i,
-            id: item.typeId.replace(/^minecraft:/, ""),
-            amount: item.amount || 1,
-            name: item.nameTag || null
-          };
+          const itemData = serializeItemWithDetails(item, i);
           if (i < 9) {
             hotbar.push(itemData);
           } else {

@@ -32,13 +32,93 @@ function getItemEmoji(id) {
   return '📦';
 }
 
+const ROMAN_NUMERALS = {
+  1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V',
+  6: 'VI', 7: 'VII', 8: 'VIII', 9: 'IX', 10: 'X'
+};
+
+const ENCHANT_LABELS = {
+  protection: 'Protection',
+  fire_protection: 'Fire Protection',
+  feather_falling: 'Feather Falling',
+  blast_protection: 'Blast Protection',
+  projectile_protection: 'Projectile Protection',
+  thorns: 'Thorns',
+  respiration: 'Respiration',
+  depth_strider: 'Depth Strider',
+  aqua_affinity: 'Aqua Affinity',
+  sharpness: 'Sharpness',
+  smite: 'Smite',
+  bane_of_arthropods: 'Bane of Arthropods',
+  knockback: 'Knockback',
+  fire_aspect: 'Fire Aspect',
+  looting: 'Looting',
+  efficiency: 'Efficiency',
+  silk_touch: 'Silk Touch',
+  unbreaking: 'Unbreaking',
+  fortune: 'Fortune',
+  power: 'Power',
+  punch: 'Punch',
+  flame: 'Flame',
+  infinity: 'Infinity',
+  luck_of_the_sea: 'Luck of the Sea',
+  lure: 'Lure',
+  frost_walker: 'Frost Walker',
+  mending: 'Mending',
+  binding: 'Curse of Binding',
+  vanishing: 'Curse of Vanishing',
+  impaling: 'Impaling',
+  riptide: 'Riptide',
+  loyalty: 'Loyalty',
+  channeling: 'Channeling',
+  multishot: 'Multishot',
+  piercing: 'Piercing',
+  quick_charge: 'Quick Charge',
+  soul_speed: 'Soul Speed',
+  swift_sneak: 'Swift Sneak',
+  wind_burst: 'Wind Burst',
+  density: 'Density',
+  breach: 'Breach'
+};
+
+function formatEnchantment(ench) {
+  if (!ench || !ench.id) return '';
+  const cleanId = String(ench.id).toLowerCase().replace(/^minecraft:/, '');
+  const name = ENCHANT_LABELS[cleanId] || cleanId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const lvl = parseInt(ench.level, 10) || 1;
+  const roman = ROMAN_NUMERALS[lvl] || String(lvl);
+
+  const singleLevel = ['mending', 'silk_touch', 'flame', 'infinity', 'channeling', 'multishot', 'binding', 'vanishing', 'aqua_affinity'];
+  if (singleLevel.includes(cleanId) && lvl === 1) {
+    return name;
+  }
+  return `${name} ${roman}`;
+}
+
 function formatItem(item) {
   if (!item || !item.id) return '*(Kosong)*';
   const cleanName = formatItemName(item.id);
   const countStr = item.amount > 1 ? ` **x${item.amount}**` : '';
   const tagStr = item.name ? ` *("${item.name}")*` : '';
   const icon = getItemEmoji(item.id);
-  return `${icon} ${cleanName}${countStr}${tagStr}`;
+
+  let result = `${icon} **${cleanName}**${countStr}${tagStr}`;
+
+  if (item.durability && item.durability.max) {
+    const pct = Math.round((item.durability.remaining / item.durability.max) * 100);
+    if (pct < 100) {
+      result += ` \`[${pct}%]\``;
+    }
+  }
+
+  if (item.enchants && Array.isArray(item.enchants) && item.enchants.length > 0) {
+    const enchList = item.enchants.map(formatEnchantment).filter(Boolean);
+    if (enchList.length > 0) {
+      result += `\n   ┗ ✨ *${enchList.join(', ')}*`;
+    }
+  }
+
+  return result;
 }
 
 module.exports = {
@@ -97,18 +177,35 @@ module.exports = {
       }
 
       // Format Armor & Offhand
-      const armorLines = [
+      let armorLines = [
         `🪖 **Helm:** ${formatItem(res.armor?.head)}`,
         `👕 **Baju:** ${formatItem(res.armor?.chest)}`,
         `👖 **Celana:** ${formatItem(res.armor?.legs)}`,
         `🥾 **Sepatu:** ${formatItem(res.armor?.feet)}`,
         `🛡️ **Offhand:** ${formatItem(res.armor?.offhand)}`
       ].join('\n');
+      if (armorLines.length > 1000) {
+        armorLines = armorLines.substring(0, 990) + '...';
+      }
 
       // Format Hotbar (Slot 1–9)
       let hotbarText = '*(Semua slot hotbar kosong)*';
       if (res.hotbar && res.hotbar.length > 0) {
-        hotbarText = res.hotbar.map(it => `**[Slot ${it.slot + 1}]** ${formatItem(it)}`).join('\n');
+        const lines = res.hotbar.map(it => `**[Slot ${it.slot + 1}]** ${formatItem(it)}`);
+        hotbarText = lines.join('\n');
+        if (hotbarText.length > 1000) {
+          hotbarText = '';
+          let count = 0;
+          for (const line of lines) {
+            if ((hotbarText + line + '\n').length > 940) break;
+            hotbarText += line + '\n';
+            count++;
+          }
+          const remaining = lines.length - count;
+          if (remaining > 0) {
+            hotbarText += `*...dan ${remaining} item lainnya.*`;
+          }
+        }
       }
 
       // Format Bag Storage (Slot 10–36)
