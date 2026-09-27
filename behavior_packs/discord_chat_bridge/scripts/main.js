@@ -882,16 +882,70 @@ try {
         if (!deadEntity) return;
 
         // Cek jika entitas yang mati adalah player
-        if (deadEntity.typeId === "minecraft:player" || deadEntity.name) {
-          const playerName = deadEntity.name || deadEntity.nameTag || "Player";
+        let isPlayer = false;
+        try {
+          if (deadEntity.typeId === "minecraft:player" || deadEntity.name) {
+            isPlayer = true;
+          }
+        } catch {}
+
+        if (isPlayer) {
+          let playerName = "Player";
+          try {
+            playerName = deadEntity.name || "Player";
+            if (playerName === "Player" && deadEntity.nameTag) {
+              const cleanTag = deadEntity.nameTag.split("\n")[0].replace(/§[0-9a-fk-or]/gi, "").trim();
+              if (cleanTag) playerName = cleanTag;
+            }
+          } catch {}
+
           const damageSource = event.damageSource;
           const cause = damageSource?.cause || "unknown";
 
           let killerName = "";
-          const killer = damageSource?.damagingEntity;
-          if (killer) {
-            const rawKiller = killer.nameTag || killer.name || (killer.typeId ? killer.typeId.replace(/^minecraft:/, "") : "");
-            killerName = rawKiller.split("\n")[0].trim();
+          try {
+            const killer = damageSource?.damagingEntity;
+            if (killer) {
+              try {
+                // Untuk player: selalu gunakan killer.name
+                if (killer.typeId === "minecraft:player" && killer.name) {
+                  killerName = killer.name;
+                }
+              } catch {}
+
+              if (!killerName) {
+                try {
+                  const tag = killer.nameTag;
+                  if (tag && typeof tag === "string") {
+                    const cleanTag = tag.split("\n")[0].replace(/§[0-9a-fk-or]/gi, "").replace(/❤.*$/, "").trim();
+                    if (cleanTag && !cleanTag.includes("❤") && !cleanTag.match(/^\d+\/\d+$/)) {
+                      killerName = cleanTag;
+                    }
+                  }
+                } catch {}
+              }
+
+              if (!killerName) {
+                try {
+                  const typeId = killer.typeId ? killer.typeId.replace(/^minecraft:/, "") : "";
+                  if (typeId) {
+                    killerName = typeId.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+                  }
+                } catch {}
+              }
+            }
+          } catch {}
+
+          // Fallback cerdas jika killer tidak terdeteksi (misal Creeper/TNT yang sudah meledak duluan)
+          if (!killerName) {
+            const lowCause = (cause || "").toLowerCase();
+            if (lowCause.includes("explosion")) {
+              killerName = "Creeper";
+            } else if (lowCause.includes("magic")) {
+              killerName = "Witch";
+            } else if (lowCause.includes("sonic")) {
+              killerName = "Warden";
+            }
           }
 
           // Ambil koordinat dan dimensi titik kematian
@@ -937,11 +991,6 @@ try {
               deadEntity.sendMessage(`§c§l[TITIK KEMATIAN] §r§eLokasi: §fX:${x} Y:${y} Z:${z} §7(${dimLabel}) §e• Ketik §f!deathpos §euntuk melihat kembali!`);
             } catch (e) {}
           }
-        } else {
-          // Jika mob mati, bersihkan nametag agar tidak menggantung sebelum despawn
-          try {
-            deadEntity.nameTag = "";
-          } catch {}
         }
       } catch (err) {
         console.warn(`[Scripting Error entityDie] ${err.message}`);
@@ -1111,7 +1160,10 @@ function updateEntityNameTagSimple(entity, enabled = true) {
   const newTag = `${displayName}\n${heartIcon} ${hpColor}${currentHp}§7/§a${maxHp}`;
 
   if (entity.nameTag !== newTag) {
-    entity.nameTag = newTag;
+    try {
+      if (typeof entity.isValid === "function" && !entity.isValid()) return;
+      entity.nameTag = newTag;
+    } catch {}
   }
 
   // Untuk mob, pastikan nametag mengambang terlihat
@@ -1214,6 +1266,23 @@ try {
           if (isNametagEnabled()) {
             updateEntityNameTagSimple(hurt, true);
           }
+        }
+
+        // Jika pemain menerima pukulan fatal, bersihkan nametag pembunuh agar in-game death message bersih dari angka darah
+        if (hurt && hurt.typeId === "minecraft:player") {
+          try {
+            const hpComp = hurt.getComponent("health") || hurt.getComponent("minecraft:health");
+            const currentHp = hpComp ? hpComp.currentValue : 0;
+            if (currentHp <= 0 || (typeof event.damage === "number" && event.damage >= currentHp)) {
+              const killer = event.damageSource?.damagingEntity;
+              if (killer) {
+                const cleanName = formatEntityDisplayName(killer);
+                if (killer.nameTag !== cleanName) {
+                  killer.nameTag = cleanName;
+                }
+              }
+            }
+          } catch {}
         }
       } catch {}
     });

@@ -410,9 +410,9 @@ class StatusManager {
 
         // 1.5. Fail-safe: Hanya gunakan deteksi UDP ping jika TIDAK ADA log monitor aktif (misal server Aternos / remote)
         const isMonitoredByLog = (s.isLocal || s.id === 'vps') && this.playerLogMonitor;
+        const currentCount = status.players?.online ?? 0;
         if (!isMonitoredByLog) {
           const prevCount = this.previousPlayerCounts[s.id] ?? 0;
-          const currentCount = status.players?.online ?? 0;
           if (status.online && currentCount > prevCount) {
             const diff = currentCount - prevCount;
             console.log(`[StatusManager] UDP Ping mendeteksi ${diff} pemain baru bergabung ke ${s.name}!`);

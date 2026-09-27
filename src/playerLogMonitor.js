@@ -623,7 +623,13 @@ class PlayerLogMonitor {
     // Terjemahkan penyebab kematian ke bahasa Indonesia
     let deathMessage = '';
     const cleanCause = (cause || '').toLowerCase();
-    const cleanKiller = killer ? killer.replace(/_/g, ' ') : '';
+
+    // Bersihkan nama pembunuh dari kode warna Minecraft (§c, dll) serta teks darah/hati
+    let cleanKiller = (killer || '')
+      .replace(/§[0-9a-fk-or]/gi, '')
+      .replace(/❤.*$/, '')
+      .replace(/_/g, ' ')
+      .trim();
 
     if (cleanCause === 'fall') {
       deathMessage = 'terpeleset dan jatuh dari tempat tinggi!';
@@ -639,12 +645,16 @@ class PlayerLogMonitor {
       deathMessage = cleanKiller
         ? `ditembak jatuh oleh **${cleanKiller}**!`
         : 'tewas tertembak anak panah!';
-    } else if (cleanCause === 'explosion') {
-      deathMessage = 'hancur lebur terkena ledakan dahsyat!';
-    } else if (cleanCause === 'fire' || cleanCause === 'fire_tick') {
+    } else if (cleanCause === 'explosion' || cleanCause === 'entityexplosion' || cleanCause === 'entity_explosion') {
+      deathMessage = cleanKiller
+        ? `hancur lebur terkena ledakan dahsyat **${cleanKiller}**!`
+        : 'hancur lebur terkena ledakan dahsyat!';
+    } else if (cleanCause === 'fire' || cleanCause === 'fire_tick' || cleanCause === 'firetick') {
       deathMessage = 'hangus terbakar api!';
     } else if (cleanCause === 'magic') {
-      deathMessage = 'tewas terkena efek racun / sihir!';
+      deathMessage = cleanKiller
+        ? `tewas terkena sihir mematikan dari **${cleanKiller}**!`
+        : 'tewas terkena efek racun / sihir!';
     } else if (cleanCause === 'wither') {
       deathMessage = 'membusuk layu terkena efek Wither!';
     } else if (cleanCause === 'starve') {
@@ -665,8 +675,16 @@ class PlayerLogMonitor {
       deathMessage = 'hancur tertimpa anvil yang jatuh!';
     } else if (cleanCause === 'thorns') {
       deathMessage = 'tewas terkena pantulan duri (Thorns)!';
+    } else if (cleanCause.includes('sonic')) {
+      deathMessage = cleanKiller
+        ? `tewas terkena tembakan gelombang suara (*Sonic Boom*) **${cleanKiller}**!`
+        : 'tewas terkena tembakan gelombang suara (*Sonic Boom*) **Warden**!';
+    } else if (cleanCause === 'contact') {
+      deathMessage = 'tewas tertusuk duri kaktus / semak berduri!';
     } else {
-      deathMessage = `telah tewas (${cause || 'alasan tidak diketahui'})`;
+      deathMessage = cleanKiller
+        ? `gugur setelah diserang oleh **${cleanKiller}** (${cause || 'alasan tidak diketahui'})`
+        : `telah tewas (${cause || 'alasan tidak diketahui'})`;
     }
 
     try {
@@ -704,7 +722,9 @@ class PlayerLogMonitor {
 
       embed.setTimestamp();
 
-      await targetChannel.send({ embeds: [embed] }).catch(() => {});
+      await targetChannel.send({ embeds: [embed] }).catch((err) => {
+        console.error('[PlayerLogMonitor] Gagal mengirim pesan death feed ke channel Discord:', err.message);
+      });
     } catch (err) {
       console.warn('[PlayerLogMonitor] Gagal kirim death feed ke Discord:', err.message);
     }
