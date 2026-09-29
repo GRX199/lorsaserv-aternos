@@ -137,6 +137,26 @@ class StatusManager {
   }
 
   /**
+   * Mengambil ID channel untuk notifikasi keamanan & alarm chest rahasia (private)
+   */
+  getSecurityAlertChannelId() {
+    return process.env.SECURITY_ALERT_CHANNEL_ID
+      || this.state.securityAlertChannelId
+      || this.config.notifications?.securityAlert?.channelId
+      || this.state.adminChannelId
+      || this.getAlertChannelId()
+      || null;
+  }
+
+  /**
+   * Menyimpan ID channel untuk notifikasi keamanan & alarm chest rahasia (private)
+   */
+  setSecurityAlertChannelId(channelId) {
+    this.state.securityAlertChannelId = channelId;
+    this.saveState();
+  }
+
+  /**
    * Mengambil status server dengan pengecekan ganda (UDP Ping + systemd fallback untuk VPS lokal)
    */
   async getStatusForServer(s) {

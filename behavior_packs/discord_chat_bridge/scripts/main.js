@@ -36,6 +36,25 @@ function saveAllWarpsDynamic(warps) {
   }
 }
 
+// Helper data chest rahasia yang diawasi sistem keamanan & alarm
+function getAllSecretChests() {
+  try {
+    const raw = world.getDynamicProperty("secret_chests");
+    if (raw && typeof raw === "string") {
+      return JSON.parse(raw);
+    }
+  } catch {}
+  return {};
+}
+
+function saveAllSecretChests(chests) {
+  try {
+    world.setDynamicProperty("secret_chests", JSON.stringify(chests));
+  } catch (err) {
+    console.warn(`[Scripting Error saveAllSecretChests] ${err.message}`);
+  }
+}
+
 // Helper daftar admin yang tersimpan di Dynamic Properties
 function getAdminPlayers() {
   try {
@@ -384,6 +403,93 @@ async function handleAdminChatCommand(sender, rawMessage) {
       }
     }
     sender.sendMessage("§eFormat: §f!tp <player1> <player2> §eatau §f!tp <x> <y> <z>");
+    return true;
+  }
+
+  // 9. !secretchest / !chestalarm <add|set|del|list|help>
+  if (cmd === "secretchest" || cmd === "chestalarm" || cmd === "alarmchest") {
+    const sub = (arg1 || "").toLowerCase();
+    const chests = getAllSecretChests();
+
+    if (sub === "add") {
+      const name = (arg2 || `chest_${Date.now().toString().slice(-4)}`).toLowerCase().replace(/[^a-z0-9_\-]/g, "");
+      const loc = sender.location;
+      const dim = sender.dimension?.id ? sender.dimension.id.replace(/^minecraft:/, "") : "overworld";
+      const bx = Math.floor(loc.x);
+      const by = Math.floor(loc.y) - 1; // 1 blok di bawah kaki pemain
+      const bz = Math.floor(loc.z);
+
+      chests[name] = {
+        name,
+        x: bx,
+        y: by,
+        z: bz,
+        dimension: dim,
+        owner: sender.name
+      };
+      saveAllSecretChests(chests);
+
+      sender.sendMessage(`§a§l[SECRET CHEST] §r§aChest rahasia '§e${name}§a' berhasil didaftarkan di §fX:${bx} Y:${by} Z:${bz}§a!`);
+      sender.sendMessage(`§7Sistem akan otomatis mendeteksi jika ada pemain lain yang melintas, menggali, atau membuka chest ini.`);
+      try { sender.runCommandAsync("playsound random.levelup @s"); } catch {}
+      console.warn(`[SECURITY_ALERT] {"type":"register","player":"${sender.name}","chest":"${name}","x":${bx},"y":${by},"z":${bz},"dim":"${dim}"}`);
+      return true;
+    }
+
+    if (sub === "set") {
+      const bx = parseInt(arg2, 10);
+      const by = parseInt(arg3, 10);
+      const bz = parseInt(arg4, 10);
+      const name = (parts[5] || `chest_${Date.now().toString().slice(-4)}`).toLowerCase().replace(/[^a-z0-9_\-]/g, "");
+      if (isNaN(bx) || isNaN(by) || isNaN(bz)) {
+        sender.sendMessage("§eFormat: §f!secretchest set <x> <y> <z> [nama]");
+        return true;
+      }
+      const dim = sender.dimension?.id ? sender.dimension.id.replace(/^minecraft:/, "") : "overworld";
+      chests[name] = {
+        name,
+        x: bx,
+        y: by,
+        z: bz,
+        dimension: dim,
+        owner: sender.name
+      };
+      saveAllSecretChests(chests);
+      sender.sendMessage(`§a§l[SECRET CHEST] §r§aTitik chest rahasia '§e${name}§a' disetel di §fX:${bx} Y:${by} Z:${bz}§a!`);
+      return true;
+    }
+
+    if (sub === "del" || sub === "remove" || sub === "hapus") {
+      const name = (arg2 || "").toLowerCase();
+      if (chests[name]) {
+        delete chests[name];
+        saveAllSecretChests(chests);
+        sender.sendMessage(`§e[SECRET CHEST] Pantauan chest rahasia '§c${name}§e' telah dihapus.`);
+      } else {
+        sender.sendMessage(`§c[SECRET CHEST] Chest rahasia '${name}' tidak ditemukan.`);
+      }
+      return true;
+    }
+
+    if (sub === "list") {
+      const list = Object.values(chests);
+      if (list.length === 0) {
+        sender.sendMessage("§e[SECRET CHEST] Belum ada chest rahasia yang didaftarkan.");
+        return true;
+      }
+      sender.sendMessage(`§6§l[DAFTAR CHEST RAHASIA DIAWASI (${list.length})]§r`);
+      for (const c of list) {
+        sender.sendMessage(`• §e${c.name} §7(X:${c.x} Y:${c.y} Z:${c.z} [${c.dimension}]) §bMilik: §f${c.owner}`);
+      }
+      return true;
+    }
+
+    // Default: help
+    sender.sendMessage("§6§l[BANTUAN CHEST RAHASIA & ALARM]§r\n" +
+      "§e!secretchest add <nama> §7- Pasang alarm di blok tempat Anda berdiri\n" +
+      "§e!secretchest set <x> <y> <z> [nama] §7- Pasang alarm di koordinat X Y Z\n" +
+      "§e!secretchest del <nama> §7- Hapus pantauan alarm chest\n" +
+      "§e!secretchest list §7- Lihat semua chest rahasia yang diawasi");
     return true;
   }
 
@@ -833,11 +939,170 @@ try {
           console.warn(`[Scripting Error bot:admin] ${err.message}`);
         }
       }
+
+      // Peringatan Keamanan & Alarm Chest dari Command Block / Script
+      if (event.id === "bot:security" || event.id === "bot:alarm" || event.id === "bot:alert") {
+        try {
+          const msg = (event.message || "").trim();
+          if (msg) {
+            console.warn(`[SECURITY_ALERT] ${msg}`);
+          }
+        } catch (err) {
+          console.warn(`[Scripting Error bot:security] ${err.message}`);
+        }
+      }
     });
-    console.warn("[Scripting] Subscribed to scriptEventReceive (bot:inv, bot:locate, bot:setwarp, bot:delwarp, bot:nametag, bot:cmd, bot:admin)");
+    console.warn("[Scripting] Subscribed to scriptEventReceive (bot:inv, bot:locate, bot:setwarp, bot:delwarp, bot:nametag, bot:cmd, bot:admin, bot:security)");
   }
 } catch (e) {
   console.warn(`[Scripting Error scriptEventReceive] ${e.message}`);
+}
+
+// 5.6. Deteksi Interaksi / Pembukaan Chest Rahasia (Alarm Security)
+try {
+  if (world?.beforeEvents && typeof world.beforeEvents.playerInteractWithBlock?.subscribe === "function") {
+    world.beforeEvents.playerInteractWithBlock.subscribe((event) => {
+      try {
+        if (!event.isFirstEvent) return;
+        const player = event.player;
+        const block = event.block;
+        if (!player || !block) return;
+
+        const chests = getAllSecretChests();
+        const chestKeys = Object.keys(chests);
+        if (chestKeys.length === 0) return;
+
+        const bx = block.location.x;
+        const by = block.location.y;
+        const bz = block.location.z;
+        const dim = block.dimension?.id ? block.dimension.id.replace(/^minecraft:/, "") : "overworld";
+
+        for (const key of chestKeys) {
+          const c = chests[key];
+          if ((c.dimension || "overworld") !== dim) continue;
+          if (c.x === bx && c.y === by && c.z === bz) {
+            const pName = player.name || "";
+            const isOwner = (c.owner || "").toLowerCase() === pName.toLowerCase();
+            if (isOwner) return; // Pemilik membuka peti sendiri
+
+            if (isPlayerAdmin(player)) return; // Admin bypass
+
+            console.warn(`[SECURITY_ALERT] {"type":"open","player":"${pName}","chest":"${c.name}","x":${bx},"y":${by},"z":${bz},"dim":"${dim}"}`);
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn(`[Scripting Error playerInteractWithBlock] ${err.message}`);
+      }
+    });
+    console.warn("[Scripting] Subscribed to beforeEvents.playerInteractWithBlock (Secret Chest Alarm)");
+  }
+} catch (e) {
+  console.warn(`[Scripting Error playerInteractWithBlock subscribe] ${e.message}`);
+}
+
+// 5.7. Deteksi Penggalian / Penghancuran Blok Penutup atau Chest Rahasia
+try {
+  if (world?.afterEvents && typeof world.afterEvents.playerBreakBlock?.subscribe === "function") {
+    world.afterEvents.playerBreakBlock.subscribe((event) => {
+      try {
+        const player = event.player;
+        const block = event.block;
+        if (!player || !block) return;
+
+        const chests = getAllSecretChests();
+        const chestKeys = Object.keys(chests);
+        if (chestKeys.length === 0) return;
+
+        const bx = block.location.x;
+        const by = block.location.y;
+        const bz = block.location.z;
+        const dim = block.dimension?.id ? block.dimension.id.replace(/^minecraft:/, "") : "overworld";
+        const brokenTypeId = (event.brokenBlockPermutation?.type?.id || "block").replace(/^minecraft:/, "");
+
+        for (const key of chestKeys) {
+          const c = chests[key];
+          if ((c.dimension || "overworld") !== dim) continue;
+
+          const pName = player.name || "";
+          const isOwner = (c.owner || "").toLowerCase() === pName.toLowerCase();
+          if (isOwner) continue;
+          if (isPlayerAdmin(player)) continue;
+
+          // Kasus 1: Blok chest itu sendiri dihancurkan
+          if (c.x === bx && c.y === by && c.z === bz) {
+            console.warn(`[SECURITY_ALERT] {"type":"break_chest","player":"${pName}","chest":"${c.name}","block":"${brokenTypeId}","x":${bx},"y":${by},"z":${bz},"dim":"${dim}"}`);
+            break;
+          }
+
+          // Kasus 2: Blok penutup tepat di atas chest (y + 1) dihancurkan / digali
+          if (c.x === bx && c.y + 1 === by && c.z === bz) {
+            console.warn(`[SECURITY_ALERT] {"type":"break_cover","player":"${pName}","chest":"${c.name}","block":"${brokenTypeId}","x":${bx},"y":${by},"z":${bz},"dim":"${dim}"}`);
+            break;
+          }
+        }
+      } catch (err) {
+        console.warn(`[Scripting Error playerBreakBlock] ${err.message}`);
+      }
+    });
+    console.warn("[Scripting] Subscribed to afterEvents.playerBreakBlock (Secret Chest Break Protection)");
+  }
+} catch (e) {
+  console.warn(`[Scripting Error playerBreakBlock subscribe] ${e.message}`);
+}
+
+// 5.8. Deteksi Pemain Melintas / Berdiri di Atas Chest Rahasia (Proximity)
+const lastProximityAlert = new Map();
+try {
+  if (system?.runInterval) {
+    system.runInterval(() => {
+      try {
+        const chests = getAllSecretChests();
+        const chestKeys = Object.keys(chests);
+        if (chestKeys.length === 0) return;
+
+        const players = world.getPlayers();
+        const now = Date.now();
+
+        for (const p of players) {
+          if (!p) continue;
+          try {
+            if (typeof p.isValid === "function" && !p.isValid()) continue;
+          } catch {}
+
+          const pName = p.name || "";
+          const loc = p.location;
+          const pDim = p.dimension?.id ? p.dimension.id.replace(/^minecraft:/, "") : "overworld";
+
+          for (const key of chestKeys) {
+            const c = chests[key];
+            if ((c.dimension || "overworld") !== pDim) continue;
+
+            const isOwner = (c.owner || "").toLowerCase() === pName.toLowerCase();
+            if (isOwner) continue;
+            if (isPlayerAdmin(p)) continue;
+
+            // Horizontal distance <= 2.0 blocks, Vertical: y antara c.y dan c.y + 3.0
+            const dx = Math.abs(loc.x - (c.x + 0.5));
+            const dz = Math.abs(loc.z - (c.z + 0.5));
+            const dy = loc.y - c.y;
+
+            if (dx <= 2.0 && dz <= 2.0 && dy >= -0.5 && dy <= 3.0) {
+              const alertKey = `${pName.toLowerCase()}:${c.name.toLowerCase()}`;
+              const lastTime = lastProximityAlert.get(alertKey) || 0;
+              // Cooldown 60 detik per pemain per chest agar tidak spam notifikasi
+              if (now - lastTime > 60000) {
+                lastProximityAlert.set(alertKey, now);
+                console.warn(`[SECURITY_ALERT] {"type":"proximity","player":"${pName}","chest":"${c.name}","x":${Math.round(loc.x)},"y":${Math.round(loc.y)},"z":${Math.round(loc.z)},"dim":"${pDim}"}`);
+              }
+            }
+          }
+        }
+      } catch (err) {}
+    }, 20); // Periksa setiap 20 tick (1 detik)
+  }
+} catch (e) {
+  console.warn(`[Scripting Error Proximity Alarm] ${e.message}`);
 }
 
 // 5.5. Snapshot otomatis setiap 20 detik untuk semua pemain yang aktif (untuk cek data saat offline)

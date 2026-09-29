@@ -381,6 +381,16 @@ class PlayerLogMonitor {
       return;
     }
 
+    // 1.85. Deteksi Security Alert / Chest Alarm (Command Block atau Add-on)
+    // Format BDS: [Scripting] [SECURITY_ALERT] {...} atau [SECURITY_ALERT] pesan teks
+    const securityMatch = line.match(/\[SECURITY_ALERT\]\s*(.*)/i);
+    if (securityMatch) {
+      const rawPayload = securityMatch[1].trim();
+      console.log(`[PlayerLogMonitor] 🚨 Security Alert Terdeteksi: ${rawPayload}`);
+      this.forwardSecurityAlertToDiscord(rawPayload);
+      return;
+    }
+
     // 1.9. Deteksi Output Perintah Konsol /list
     // Format BDS: There are 4/10 players online:
     // Player1, Player2, Player3, Player4
@@ -727,6 +737,109 @@ class PlayerLogMonitor {
       });
     } catch (err) {
       console.warn('[PlayerLogMonitor] Gagal kirim death feed ke Discord:', err.message);
+    }
+  }
+
+  /**
+   * Mengirimkan notifikasi peringatan keamanan / alarm chest rahasia ke channel private Discord
+   */
+  async forwardSecurityAlertToDiscord(rawPayload) {
+    if (!this.statusManager?.client) return;
+
+    const channelId = this.statusManager?.getSecurityAlertChannelId?.();
+    if (!channelId) {
+      console.warn('[PlayerLogMonitor] Channel private untuk security alert belum disetel. Gunakan /setup-security di Discord.');
+      return;
+    }
+
+    const targetChannel = await this.statusManager.client.channels.fetch(channelId).catch(() => null);
+    if (!targetChannel || !targetChannel.isTextBased()) return;
+
+    let title = '🚨 PERINGATAN KEAMANAN: CHEST RAHASIA!';
+    let description = '';
+    let playerName = null;
+    let coords = null;
+    let actionType = 'alert';
+    let blockName = null;
+    let chestName = null;
+
+    try {
+      if (rawPayload.startsWith('{') && rawPayload.endsWith('}')) {
+        const data = JSON.parse(rawPayload);
+        playerName = data.player || null;
+        chestName = data.chest || null;
+        blockName = data.block || null;
+        actionType = data.type || data.action || 'alert';
+
+        if (data.x !== undefined && data.y !== undefined && data.z !== undefined) {
+          coords = {
+            x: data.x,
+            y: data.y,
+            z: data.z,
+            dim: data.dim || 'overworld'
+          };
+        }
+
+        const chestLabel = chestName ? `**'${chestName}'**` : 'Rahasia';
+
+        if (actionType === 'open') {
+          title = '🔓 CHEST RAHASIA TELAH DIBUKA!';
+          description = `Pemain **${playerName || 'Penyusup'}** baru saja **membuka / mengakses** chest ${chestLabel}!`;
+        } else if (actionType === 'break_cover') {
+          title = '⛏️ BLOK PENUTUP CHEST TELAH DIGALI!';
+          description = `Pemain **${playerName || 'Penyusup'}** telah **menggali/menghancurkan blok \`${blockName || 'penutup'}\`** tepat di atas chest ${chestLabel}!`;
+        } else if (actionType === 'break_chest') {
+          title = '💥 CHEST RAHASIA TELAH DIHANCURKAN!';
+          description = `Pemain **${playerName || 'Penyusup'}** telah **menghancurkan chest** ${chestLabel}!`;
+        } else if (actionType === 'proximity') {
+          title = '👣 PENYUSUP BERADA DI ATAS CHEST RAHASIA!';
+          description = `Pemain **${playerName || 'Penyusup'}** terdeteksi sedang **berjalan / berdiri di atas area chest** ${chestLabel}!`;
+        } else {
+          description = data.message || `Aktivitas mencurigakan terdeteksi pada chest ${chestLabel}!`;
+        }
+      } else {
+        description = rawPayload;
+        const matchName = rawPayload.match(/(?:oleh|player|pemain)\s+([a-zA-Z0-9_ -]+)/i);
+        if (matchName) {
+          playerName = matchName[1].trim();
+        }
+      }
+    } catch {
+      description = rawPayload;
+    }
+
+    try {
+      const { EmbedBuilder } = require('discord.js');
+      const embed = new EmbedBuilder()
+        .setColor(0xE74C3C)
+        .setTitle(title)
+        .setDescription(description)
+        .setTimestamp();
+
+      if (playerName && playerName !== 'Penyusup') {
+        embed.setThumbnail(`https://mc-heads.net/avatar/${encodeURIComponent(playerName)}/128`);
+        embed.addFields({ name: '👤 Pelaku', value: `\`${playerName}\``, inline: true });
+      }
+
+      if (coords && coords.x !== undefined && coords.y !== undefined && coords.z !== undefined) {
+        const dimKey = (coords.dim || 'overworld').toLowerCase();
+        const dimLabel = dimKey.includes('nether') ? '🔥 The Nether' : dimKey.includes('end') ? '🌌 The End' : '🌳 Overworld';
+        embed.addFields(
+          { name: '📍 Koordinat', value: `\`X:${coords.x} Y:${coords.y} Z:${coords.z}\` (${dimLabel})`, inline: true },
+          { name: '⚡ Teleport In-Game (Admin)', value: `\`!tp ${coords.x} ${coords.y} ${coords.z}\``, inline: false }
+        );
+      }
+
+      embed.setFooter({ text: 'Sistem Deteksi Keamanan Chest Rahasia' });
+
+      await targetChannel.send({
+        content: `🚨 **[PERINGATAN CHEST RAHASIA]**`,
+        embeds: [embed]
+      }).catch((err) => {
+        console.error('[PlayerLogMonitor] Gagal mengirim security alert ke Discord:', err.message);
+      });
+    } catch (err) {
+      console.warn('[PlayerLogMonitor] Error saat mengirim security alert:', err.message);
     }
   }
 
